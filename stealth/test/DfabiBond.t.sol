@@ -32,6 +32,7 @@ contract DfabiBondTest {
 
     address constant ERC1820 = 0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24;
     bytes32 constant TRANCHE_A = bytes32("TRANCHE-A");
+    bytes32 constant TRANCHE_B = bytes32("TRANCHE-B");
     uint256 constant CUSTODIAN_KEY = 0xC0570D1A;
     uint256 constant ROGUE_KEY = 0xBAD;
     address constant SENDER = address(0x5E4DE2);
@@ -253,6 +254,31 @@ contract DfabiBondTest {
         token.redeemByPartition(TRANCHE_A, 100, cert);
         require(token.totalSupplyByPartition(TRANCHE_A) == 900, "supply after redeem");
         require(token.balanceOfByPartition(TRANCHE_A, SENDER) == 900, "holder after redeem");
+    }
+
+    // Every other test uses TRANCHE_A and tag 0x20, so this one pins that the announcement follows the arguments.
+    // TRANCHE_B is not in the default partitions; the vendored _issueByPartition registers a new partition itself.
+    function test_announcement_follows_tranche_and_view_tag() public {
+        _fund(SENDER, 500); // tranche A, must stay untouched
+        vm.prank(custodian);
+        vm.expectEmit(true, true, true, true, address(announcer));
+        emit Announcement(1, SENDER, address(token), _eph(33), _meta(0x7f, 1000, TRANCHE_B));
+        token.issueByPartitionStealth(TRANCHE_B, SENDER, 1000, _eph(33), 0x7f);
+
+        bytes memory payload =
+            _strip(abi.encodeCall(token.transferByPartitionStealth, (TRANCHE_B, STEALTH, 400, _eph(33), 0x7f, new bytes(97))));
+        bytes memory cert = _certFor(SENDER, payload, block.timestamp + 600, CUSTODIAN_KEY);
+        vm.expectEmit(true, true, true, true, address(announcer));
+        emit Announcement(1, STEALTH, address(token), _eph(33), _meta(0x7f, 400, TRANCHE_B));
+        vm.prank(SENDER);
+        token.transferByPartitionStealth(TRANCHE_B, STEALTH, 400, _eph(33), 0x7f, cert);
+
+        require(token.balanceOfByPartition(TRANCHE_B, STEALTH) == 400, "B recipient");
+        require(token.balanceOfByPartition(TRANCHE_B, SENDER) == 600, "B remainder");
+        require(token.balanceOfByPartition(TRANCHE_A, SENDER) == 500, "A sender untouched");
+        require(token.balanceOfByPartition(TRANCHE_A, STEALTH) == 0, "A recipient untouched");
+        require(token.totalSupplyByPartition(TRANCHE_A) == 500, "A supply");
+        require(token.totalSupplyByPartition(TRANCHE_B) == 1000, "B supply");
     }
 
     function test_document_can_be_set_and_read() public {
