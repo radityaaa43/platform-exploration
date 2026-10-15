@@ -1,7 +1,7 @@
 # RD stealth token (ERC-20 with ERC-5564 announcements) design
 
 Date: 2026-10-15
-Status: draft, awaiting user review
+Status: approved 2026-10-15; implemented, results in section 7
 Part of: privacy-enabled RD + DFABI directly on Hyperledger Besu (no Paladin). Sub-project 2 of 4.
 Depends on: stealth core (`2026-10-15-stealth-core-design.md`, committed, final fix wave in flight).
 
@@ -85,4 +85,9 @@ The token itself calls `announce`, so the `caller` field of every announcement i
 
 ## 7. Results
 
-Filled in after the live smoke run.
+Live smoke 2026-10-15 on the ACK `besu` namespace via `besu-node-validator-1-0` (`stealth/script/smoke-rd.ts`, passed on the first run):
+
+- Chain id `1337`, gas price `0`. Stealth addresses sent and burned with no funding, matching the sub-project 1 result: no gas sponsor needed here.
+- All checks passed: `mintStealth` of 1000 RD to bank A; A's scan over only the token's own announcements found exactly one payment and its metadata (token, amount 1000) matched `balanceOf`; A sent 400 to B from its unfunded stealth address and kept 600; B's scan found exactly one payment holding 400; a forged announcement carrying RD-looking metadata (posted straight to the Announcer, so `caller` is the poster, not the token) showed up in the unfiltered scan but not in the `caller`-filtered scan, and its address held 0; both banks burned and final `totalSupply` was 0.
+- Throwaway contracts left on the network, not for use: Announcer `0x501bD2fc53f552013a64d98cE958495484379d8F`, RD `0x4e99d46878919168d17816b3315Db4ba5d065127`.
+- The only failure mode not exercised live is a plain ERC-20 `transfer` to a stealth address (silent by design; covered by the risk in section 6, and by the contract NatSpec).
