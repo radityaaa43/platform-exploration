@@ -37,6 +37,7 @@ contract DfabiBondTest {
     address constant SENDER = address(0x5E4DE2);
     address constant STEALTH = address(0x57EA17);
     address constant OTHER = address(0x07E2);
+    address constant SIGNER2 = address(0x51612);
 
     address custodian;
     ERC5564Announcer announcer;
@@ -129,9 +130,13 @@ contract DfabiBondTest {
     }
 
     function test_issue_only_minter() public {
-        vm.prank(SENDER);
-        vm.expectRevert();
+        // SIGNER2 passes the validator's certificate gate but is not a minter, so only onlyMinter can stop it.
+        validator.addCertificateSigner(address(token), SIGNER2);
+        vm.prank(SIGNER2);
+        vm.expectRevert(bytes(""));
         token.issueByPartitionStealth(TRANCHE_A, STEALTH, 1, _eph(33), 0x20);
+        _fund(STEALTH, 1);
+        require(token.balanceOfByPartition(TRANCHE_A, STEALTH) == 1, "minter can issue");
     }
 
     function test_issue_moves_and_announces() public {
