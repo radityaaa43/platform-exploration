@@ -3,6 +3,7 @@ src = "src"
 test = "test"
 out = "out"
 libs = []
+remappings = ["@openzeppelin/contracts/=node_modules/@openzeppelin/contracts/"]
 
 # Same evmVersion the rest of this repo's contracts use (Paladin/contracts/foundry.toml).
 # Confirm it deploys on the ACK Besu network in Task 3.
