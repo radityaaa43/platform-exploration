@@ -38,9 +38,11 @@ Constructor: `(address issuer_, address announcer_)`.
 | `burn(uint256 amount)` | holder | Inherited from `ERC20Burnable`. |
 | `decimals()` | any | Returns `0`. |
 
+The contract also inherits `burnFrom`, `approve`, `transfer` and `transferFrom` from OpenZeppelin; none of them announce, so a `transfer` or `transferFrom` to a stealth address is silent like any plain ERC-20 transfer.
+
 `mintStealth` is an addition to the design shown on 2026-10-15: without it the first hop (BI funds a bank) would need a separate `announce` call whose `caller` is BI, not the token, which breaks the trust rule below.
 
-Reverts: `InvalidEphemeralPubKey()` when `ephemeralPubKey.length != 33`; `OnlyIssuer()` for non-issuer mint calls; the OpenZeppelin errors for zero recipient and insufficient balance.
+Reverts: `InvalidEphemeralPubKey()` when `ephemeralPubKey.length != 33`; `ZeroAmount()` when `amount == 0` for `mintStealth` and `sendStealth`; `OnlyIssuer()` for non-issuer mint calls; the OpenZeppelin errors for zero recipient and insufficient balance.
 
 ### Announcement metadata (EIP-5564, ERC-20 form, 57 bytes)
 
@@ -68,7 +70,7 @@ The token itself calls `announce`, so the `caller` field of every announcement i
 
 ## 5. Tests and checks
 
-1. **Foundry** (`stealth/test/RupiahDigital.t.sol`): non-issuer `mint` and `mintStealth` revert; `mintStealth` and `sendStealth` move the balance and emit `Announcement(1, stealth, address(token), ephemeralPubKey, metadata)` with the exact 57 bytes (expected value built in the test with `bytes.concat`, independent of the contract's encoding); ephemeral key lengths 0, 32, 34, 65 revert; zero recipient and insufficient balance revert; a partial send leaves the remainder and announces only the sent amount; `burn` lowers `totalSupply`; `decimals()` is 0.
+1. **Foundry** (`stealth/test/RupiahDigital.t.sol`): non-issuer `mint` and `mintStealth` revert; `mintStealth` and `sendStealth` move the balance and emit `Announcement(1, stealth, address(token), ephemeralPubKey, metadata)` with the exact 57 bytes (expected value built in the test with `bytes.concat`, independent of the contract's encoding); ephemeral key lengths 0, 32, 34, 65 revert; zero amount reverts for both `sendStealth` (even from an account holding no RD) and `mintStealth`; the announce tests pin the emitter to the Announcer (`expectEmit` with the Announcer address); zero recipient and insufficient balance revert; a partial send leaves the remainder and announces only the sent amount; `burn` lowers `totalSupply`; `decimals()` is 0.
 2. **TypeScript** (`stealth/ts/token.test.ts`): build then parse round trip; a fixed golden vector for the 57 bytes; `parseTokenMetadata` returns `null` for empty, tag-only, 56 and 58 bytes, wrong selector; `buildTokenMetadata` throws for a 2-byte tag, bad address, negative amount, `2^256`; `scan` still finds an announcement whose metadata comes from `buildTokenMetadata`.
 3. **Besu smoke** (`stealth/script/smoke-rd.ts`, one-off, not CI): deploy a fresh Announcer and `RupiahDigital` (deployer = issuer); BI `mintStealth` 1000 to bank A; A scans logs filtered by `caller = token` and bounded from the pre-deploy block, checks `balanceOf` equals the metadata amount; A, from its unfunded stealth address, `sendStealth` 400 to bank B; B scans and finds 400; a forged announcement (posted straight to the Announcer, `caller` = attacker) appears in an unfiltered scan but not in the `caller`-filtered one, and its address holds 0; B burns 400, A burns the remaining 600; final `totalSupply` is 0. Results (addresses, any failure) are recorded in section 7 after the live run.
 
@@ -81,7 +83,9 @@ The token itself calls `announce`, so the `caller` field of every announcement i
 - Sender, amount and token are public by design. Only the recipient is hidden.
 - Gas price on this Besu network is 0 (sub-project 1 smoke). On a network with fees, stealth addresses need gas before they can send.
 - `eth_getLogs` is range-capped on this Besu network; real scanners must page and checkpoint.
-- Ethereum precompile differences are not an issue here: no precompiles beyond `ecrecover` used on chain; all curve math is off chain.
+- No contract here uses a precompile; all curve math is off chain.
+- Zero-amount announcements revert, but 1-unit dust announcements from anyone who holds RD still pass the `caller == token` filter and cost every scanner one ECDH computation. The `caller` filter guarantees each announcement matches a real transfer; it does not make it wanted. `balanceOf` (or the `Transfer` event of the same transaction) is the authority, never the metadata amount; wallets must dedupe by stealth address and never sum metadata amounts.
+- For sub-project 4 (DvP): the DvP contract must hold the escrowed RD itself and call `sendStealth`, so `caller` is the token. A `transferFrom(buyer, sellerStealth, ...)` announces nothing, and a `announce` call made by the DvP contract carries the DvP as `caller` and fails the scanner's filter. Settlement confirmation must read `Transfer` or `balanceOf`, never announcement metadata.
 
 ## 7. Results
 

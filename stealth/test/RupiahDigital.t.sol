@@ -6,7 +6,7 @@ import {RupiahDigital} from "../src/RupiahDigital.sol";
 import {IERC20Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 
 interface Vm {
-    function expectEmit(bool, bool, bool, bool) external;
+    function expectEmit(bool, bool, bool, bool, address) external;
     function expectRevert(bytes4) external;
     function expectRevert(bytes calldata) external;
     function prank(address) external;
@@ -78,7 +78,7 @@ contract RupiahDigitalTest {
 
     // Review focus 3: caller is the token, metadata is 57 bytes.
     function test_mintStealth_mints_and_announces() public {
-        vm.expectEmit(true, true, true, true);
+        vm.expectEmit(true, true, true, true, address(announcer));
         emit Announcement(1, STEALTH, address(token), _eph(33), _meta(0x20, 1000));
         vm.prank(ISSUER);
         token.mintStealth(STEALTH, 1000, _eph(33), 0x20);
@@ -89,13 +89,26 @@ contract RupiahDigitalTest {
     // Review focus 3: anyone holding balance can sendStealth; transfers and announces.
     function test_sendStealth_transfers_and_announces() public {
         _fund(ALICE, 1000);
-        vm.expectEmit(true, true, true, true);
+        vm.expectEmit(true, true, true, true, address(announcer));
         emit Announcement(1, STEALTH, address(token), _eph(33), _meta(0x7f, 400));
         vm.prank(ALICE);
         token.sendStealth(STEALTH, 400, _eph(33), 0x7f);
         require(token.balanceOf(STEALTH) == 400, "stealth");
         require(token.balanceOf(ALICE) == 600, "alice");
         require(token.totalSupply() == 1000, "supply");
+    }
+
+    // Zero-amount announcements are free spam (gas price 0), so they revert.
+    function test_sendStealth_zero_amount_reverts_without_balance() public {
+        vm.prank(ALICE);
+        vm.expectRevert(RupiahDigital.ZeroAmount.selector);
+        token.sendStealth(STEALTH, 0, _eph(33), 0x20);
+    }
+
+    function test_mintStealth_zero_amount_reverts() public {
+        vm.prank(ISSUER);
+        vm.expectRevert(RupiahDigital.ZeroAmount.selector);
+        token.mintStealth(STEALTH, 0, _eph(33), 0x20);
     }
 
     // Review focus 2: ephemeral key must be exactly 33 bytes.

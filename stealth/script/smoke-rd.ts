@@ -1,5 +1,5 @@
 // One-off RD smoke check against a live Besu network. Not part of CI.
-// Usage: forge build && RPC_URL=... DEPLOYER_KEY=0x... node script/smoke-rd.ts
+// Usage: forge build && set -a && . ./.env.smoke && set +a && node script/smoke-rd.ts
 import { readFileSync } from 'node:fs';
 import { Contract, ContractFactory, JsonRpcProvider, Wallet } from 'ethers';
 import { deriveStealth, generateMetaAddress, scan, type Announcement } from '../ts/stealth.ts';
@@ -59,6 +59,7 @@ check(foundA && restA.length === 0, 'bank A finds exactly one payment');
 const metaA = parseTokenMetadata(annsA.find((a) => a.stealthAddress === foundA.stealthAddress)!.metadata);
 check(metaA && metaA.token === tokenAddr && metaA.amount === 1000n, 'metadata says 1000 RD of this token');
 check((await token.balanceOf(foundA.stealthAddress)) === 1000n, 'bank A stealth address holds 1000');
+check((await provider.getBalance(foundA.stealthAddress)) === 0n, 'bank A stealth address has no native balance');
 
 // 3. Bank A sends 400 to bank B from its unfunded stealth address (gas price 0).
 const walletA = new Wallet(foundA.privateKey, provider);
@@ -67,8 +68,11 @@ await (await token.connect(walletA).getFunction('sendStealth')(toB.stealthAddres
 check((await token.balanceOf(foundA.stealthAddress)) === 600n, 'bank A keeps the 600 remainder');
 
 // 4. Bank B scans and finds 400.
-const [foundB, ...restB] = scan(await announcements(true), bankB.viewKey, bankB.spendKey);
+const annsB = await announcements(true);
+const [foundB, ...restB] = scan(annsB, bankB.viewKey, bankB.spendKey);
 check(foundB && restB.length === 0, 'bank B finds exactly one payment');
+const metaB = parseTokenMetadata(annsB.find((a) => a.stealthAddress === foundB.stealthAddress)!.metadata);
+check(metaB && metaB.token === tokenAddr && metaB.amount === 400n, 'bank B metadata says 400 RD of this token');
 check((await token.balanceOf(foundB.stealthAddress)) === 400n, 'bank B stealth address holds 400');
 
 // 5. Forged announcement: the issuer posts RD-looking metadata straight to the Announcer for bank B.
