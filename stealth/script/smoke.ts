@@ -21,6 +21,8 @@ const net = await provider.getNetwork();
 const gasPrice = (await provider.getFeeData()).gasPrice ?? 0n;
 console.log('chainId', net.chainId.toString(), '| gasPrice', gasPrice.toString());
 
+// Besu caps the eth_getLogs range ("Requested range exceeds maximum RPC range limit"), so scan from here, not block 0.
+const fromBlock = await provider.getBlockNumber();
 const announcer = await deploy('ERC5564Announcer');
 const registry = await deploy('ERC6538Registry');
 console.log('announcer', await announcer.getAddress(), '| registry', await registry.getAddress());
@@ -34,7 +36,7 @@ const s = deriveStealth(await registry.stealthMetaAddressOf(deployer.address, 1)
 await (await announcer.announce(1, s.stealthAddress, s.ephemeralPubKey, s.viewTag)).wait();
 
 // Recipient scans the chain logs.
-const logs = await announcer.queryFilter(announcer.filters.Announcement());
+const logs = await announcer.queryFilter(announcer.filters.Announcement(), fromBlock);
 const anns: Announcement[] = logs.map((l: any) => ({
   schemeId: l.args.schemeId,
   stealthAddress: l.args.stealthAddress,

@@ -77,6 +77,14 @@ first byte of `h`.
 2. **Library round trip** (vitest): `generateMetaAddress` -> `deriveStealth` -> `scan` returns the same address, and a `Wallet` built from the returned private key reports that address. Plus a non-matching announcement is skipped, and the reference vector matches.
 3. **Besu smoke script** (`stealth/script`): deploy both contracts to the ACK Besu network, register keys, announce, scan the chain logs, and sign a transaction from the recovered stealth key. Prints chain id and gas price; **record them in this spec**, because sub-project 2 needs to know whether stealth addresses must be gas-sponsored. This is a throwaway-style check run once, not a CI test.
 
+**Results (2026-10-15, ACK `besu` namespace, via `besu-node-validator-1-0`):**
+
+- Chain id `1337`. Gas price `0`: a fresh stealth address can send a transaction with no funding, so **sub-project 2 needs no gas sponsor** on this network.
+- EVM `shanghai` bytecode deploys and runs.
+- Full flow passed: register meta-address, derive, announce, `scan` over chain logs recovers the address, and a transaction sent from the recovered key is signed by the stealth address.
+- Besu rejects `eth_getLogs` from block 0 (`-32005 Requested range exceeds maximum RPC range limit`). Scanners must read from a start block in bounded ranges. Sub-projects 2 and 3 must keep a scan checkpoint; the smoke script now reads from the block before deploy.
+- Contracts left on the network by the runs (throwaway, not for use): announcers `0x9703b5dBDdd7B027f5A82966E6924fBDEf67623f`, `0x7C298D65C6922AFEBDE2D91c48cFcE680394f009`; registries `0x15edd73F33284b40DEA47A1aa847e1cfC0C5666d`, `0xC80491851552a08F6C742DE8EBC643cB2777ead2`. The first run failed at the log read, so two deployments exist. The pair from the passing run is the second.
+
 Not done here: sponsoring gas for stealth addresses, token transfers, KYC/whitelist, DvP.
 
 ## 7. Risks
