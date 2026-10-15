@@ -1,0 +1,19 @@
+{
+  "name": "stealth",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "tsc --noEmit && vitest run",
+    "test:sol": "forge test",
+    "smoke": "node script/smoke.ts"
+  },
+  "dependencies": {
+    "@noble/curves": "1.2.0",
+    "ethers": "6.17.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  }
+}
