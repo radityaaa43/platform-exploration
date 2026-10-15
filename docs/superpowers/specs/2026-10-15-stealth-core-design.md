@@ -1,7 +1,7 @@
 # Stealth core (ERC-5564 + ERC-6538) design
 
 Date: 2026-10-15
-Status: draft, awaiting user review
+Status: approved 2026-10-15; implemented, results in section 6
 Part of: privacy-enabled RD + DFABI directly on Hyperledger Besu (no Paladin).
 
 ## 1. Why

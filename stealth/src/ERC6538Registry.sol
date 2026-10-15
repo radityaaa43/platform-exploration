@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.20;
 
-/// @notice ERC-6538 stealth meta-address registry. `registerKeysOnBehalf` (EIP-712) is deliberately
-/// not implemented, so this is not fully ERC-6538 compliant. Add it when a compliance claim is needed.
+/// @notice ERC-6538 stealth meta-address registry, partial implementation.
+/// @dev `registerKeysOnBehalf` (EIP-712) is not implemented, so `DOMAIN_SEPARATOR()`,
+/// `ERC6538REGISTRY_ENTRY_TYPE_HASH()` and the `ERC6538Registry__InvalidSignature` error are absent too.
+/// `nonceOf`/`incrementNonce` exist for interface shape only; there is no signature to cancel.
+/// The scheme-1 66-byte length check in `registerKeys` is stricter than the EIP, which does no validation.
+/// Tools that look for the full ERC-6538 interface will not detect this contract, and a wallet or
+/// relayer cannot register on a user's behalf. Add `registerKeysOnBehalf` when a compliance claim is needed.
 contract ERC6538Registry {
     error InvalidMetaAddressLength();
 

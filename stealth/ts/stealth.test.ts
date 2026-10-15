@@ -62,6 +62,27 @@ describe('round trip', () => {
     const ann = { ...toAnn(deriveStealth(me.metaAddress)), schemeId: 2n };
     expect(scan([ann], me.viewKey, me.spendKey)).toEqual([]);
   });
+
+  // schemeId read back from JSON is a number, not a bigint.
+  it('accepts a non-bigint schemeId of 1 and still skips 2', () => {
+    const me = generateMetaAddress();
+    const ann = toAnn(deriveStealth(me.metaAddress));
+    expect(scan([{ ...ann, schemeId: 1 as unknown as bigint }], me.viewKey, me.spendKey)).toHaveLength(1);
+    expect(scan([{ ...ann, schemeId: 2n }], me.viewKey, me.spendKey)).toEqual([]);
+  });
+
+  // Anyone can re-post a real announcement; the payment must be reported once.
+  it('returns a re-posted announcement once', () => {
+    const me = generateMetaAddress();
+    const ann = toAnn(deriveStealth(me.metaAddress));
+    expect(scan([ann, ann], me.viewKey, me.spendKey)).toHaveLength(1);
+  });
+
+  it('throws on a malformed view key instead of returning []', () => {
+    const me = generateMetaAddress();
+    const ann = toAnn(deriveStealth(me.metaAddress));
+    expect(() => scan([ann], '0x' + '22'.repeat(31), me.spendKey)).toThrow();
+  });
 });
 
 describe('hostile input', () => {
@@ -90,5 +111,12 @@ describe('hostile input', () => {
 
   it('deriveStealth throws on an off-curve key', () => {
     expect(() => deriveStealth('0x' + '05'.repeat(66))).toThrow();
+  });
+
+  // Valid view half, so only the spend-key check can throw.
+  it('deriveStealth throws on an off-curve spend key with a valid view key', () => {
+    const viewPub = generateMetaAddress().metaAddress.slice(2 + 66);
+    const badSpend = '02' + '00'.repeat(31) + '05'; // x = 5 has no square root on secp256k1
+    expect(() => deriveStealth('0x' + badSpend + viewPub)).toThrow(/square root/);
   });
 });

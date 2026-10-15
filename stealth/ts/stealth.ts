@@ -36,14 +36,18 @@ export function deriveStealth(metaAddress: string, ephemeralKey = hexlify(secp25
 
 export function scan(announcements: Announcement[], viewKey: string, spendKey: string): Found[] {
   const spendPub = pubOf(spendKey);
+  pubOf(viewKey); // fail loudly on a bad view key rather than skipping every announcement
   const found: Found[] = [];
+  const seen = new Set<string>(); // anyone can re-post a real announcement
   for (const a of announcements) {
     try {
-      if (a.schemeId !== SCHEME_ID) continue;
+      if (BigInt(a.schemeId) !== SCHEME_ID) continue; // BigInt() tolerates 1 / "1" from JSON
       const h = hashShared(viewKey, getBytes(a.ephemeralPubKey));
       if (getBytes(a.metadata)[0] !== getBytes(h)[0]) continue; // view tag; empty metadata never matches
       const stealthAddress = addressOf(spendPub, h);
       if (stealthAddress.toLowerCase() !== a.stealthAddress.toLowerCase()) continue;
+      if (seen.has(stealthAddress.toLowerCase())) continue;
+      seen.add(stealthAddress.toLowerCase());
       const k = (BigInt(spendKey) + BigInt(h)) % N;
       found.push({ stealthAddress, privateKey: '0x' + k.toString(16).padStart(64, '0') });
     } catch {
