@@ -1,7 +1,7 @@
 # DFABI bond token (ERC-1400 with ERC-5564 announcements) design
 
 Date: 2026-10-15
-Status: draft, awaiting review
+Status: approved 2026-10-15; implemented, results in section 8
 Part of: privacy-enabled RD + DFABI directly on Hyperledger Besu (no Paladin). Sub-project 3 of 4.
 Depends on: stealth core (`2026-10-15-stealth-core-design.md`) and the RD token pattern (`2026-10-15-rd-stealth-token-design.md`).
 
@@ -49,7 +49,7 @@ Both new functions call the parent's internal `_issueByPartition` / `_transferBy
 
 ### Lock-down of the ERC-20 path
 
-`transfer` and `transferFrom` skip certificates. To close that hole the setup sequence activates the validator's **allowlist** with only the custodian on it: for those two selectors the validator then rejects any sender or recipient that is not allowlisted. To be confirmed by a test (section 6): an ERC-20 `transfer` between non-allowlisted addresses reverts with code `54`.
+`transfer` and `transferFrom` skip certificates. To close that hole the setup sequence activates the validator's **allowlist** with only the custodian on it: for those two selectors the validator then rejects any sender or recipient that is not allowlisted. To be confirmed by a test (section 6): an ERC-20 `transfer` between non-allowlisted addresses reverts with code `54`. This lock lasts only while the token owner keeps the validator and its setup in place; see the owner-key risk in section 7.
 
 ### Announcement metadata (89 bytes)
 
@@ -69,9 +69,9 @@ Same as RD: the token calls `announce`, so `caller` is the token address and can
 
 ### Certificate flow (who signs what)
 
-1. Investor bank B publishes its meta-address to the custodian (the custodian already holds B's view key and spend public key from KYC).
+1. Investor bank B publishes its meta-address to the custodian (the custodian already holds B's view key and spend public key from KYC). A bank should register a dedicated meta-address for bonds: the custodian holds the view key, so if the bank reused its RD meta-address the custodian would also see the bank's RD receipts.
 2. Sender A derives a stealth address `S` and ephemeral key `R` for B and sends `(S, R, viewTag, partition, amount)` to the custodian off chain.
-3. The custodian verifies that `S` belongs to a KYC'd investor (it can recompute `S` from B's meta-address and `R`), reads `usedCertificateNonce(token, A_stealth)` from the validator, and signs a certificate for the exact `transferByPartitionStealth` calldata with a short expiry.
+3. The custodian verifies that `S` belongs to a KYC'd investor (it can recompute `S` from B's meta-address and `R`), reads `usedCertificateNonce(token, A_stealth)` from the validator, and signs a certificate for the exact `transferByPartitionStealth` calldata with a short expiry. The certificate binds the whole calldata, including `ephemeralPubKey` and `viewTag`, but nothing on chain checks that they are consistent with the recipient, so this check is the custodian's duty. The custodian decodes the calldata itself and never signs an opaque payload. It signs only the `transferByPartitionStealth` and `redeemByPartition` selectors. With the bank's view key it checks that `S`, `R` and `viewTag` are consistent (recompute `S` and the tag from `R`) and refuses otherwise.
 4. A submits the transaction with the certificate as `data`. The validator verifies the signature and increments the nonce.
 
 On chain only `S` appears; the link from `S` to bank B exists in the custodian's records only.
@@ -82,7 +82,10 @@ On chain only `S` appears; the link from `S` to bank B exists in the custodian's
 |---|---|
 | `buildBondMetadata(viewTag, token, amount, partition): string` | 89-byte `0x` hex. Throws on bad tag, address, amount outside `0 .. 2^256-1`, or partition not 32 bytes. |
 | `parseBondMetadata(metadata)` | `{ viewTag, token, amount, partition } \| null`; never throws; `null` for anything that is not 89 bytes with the right selector (including RD's 57-byte form). |
-| `signTransferCertificate({ custodianKey, token, domainSeparator, msgSender, calldataWithoutCertificate, expiry, nonce }): string` | Returns the 97-byte certificate as `0x` hex, following the hash rule in section 3. Custodian side. |
+| `payloadWithoutCertificate(calldata): string` | Takes calldata encoded with a 97-byte placeholder as the certificate and returns the calldata minus its last 160 bytes (what the custodian signs over). Throws if the calldata is too short. |
+| `certificateDigest(params): string` | `params = { domainSeparator, msgSender, token, payload, expiry, nonce }`. Returns `keccak256(domainSeparator ++ keccak256(msgSender ++ token ++ payload ++ expiry ++ nonce))`, the hash rule in section 3. Throws on a bad domain separator, address or out-of-range `expiry` / `nonce`. |
+| `signCertificate(custodianKey, params): string` | Same `params`. Returns the 97-byte certificate as `0x` hex (`expiry(32) \| r(32) \| s(32) \| v(1)`), signed raw over the digest. Custodian side. |
+| `CERTIFICATE_LENGTH` | Constant, 97. |
 
 `scan` from sub-project 1 is unchanged.
 
@@ -97,9 +100,12 @@ On chain only `S` appears; the link from `S` to bank B exists in the custodian's
 
 - **Unreviewed, archived base.** The bond token inherits whatever bugs the vendor code has. Nothing here audits it. Pinned by commit so it cannot change underneath us.
 - **Custodian is a controller and a certificate signer.** It can force transfers and decide who may receive. This is by design for a regulated bond, but it also means the custodian sees every recipient and its key is the most sensitive key in the system. Key custody and rotation are out of scope here.
+- **The token owner is the most powerful key.** `onlyMinter` is `isMinter || owner`, and the owner can call `setTokenExtension`, `registerTokenSetup`, `setControllers`, `addMinter` and `migrate(definitive)`. Reproduced in review: the owner calls `setTokenExtension(address(0), "ERC1400TokensValidator", ...)`, which removes the certificates and the allowlist in one transaction, after which an ERC-20 `transfer` between non-allowlisted addresses succeeds. The owner can also mint silently through the inherited `issueByPartition` (no announcement), and `migrate(definitive)` freezes the token. The ERC-20 lock-down therefore lasts only while the owner keeps the validator and its setup. The owner should be the custodian or a custody multisig; a separate deployer key would be an unlisted party that can undo the lock.
 - **Custodian must be online per transfer** (nonce-based certificates), and each certificate is bound to one exact call. A failed or reordered transaction by the same sender invalidates the next certificate until the nonce matches; senders must request certificates one at a time.
 - **The nonce is per `msg.sender`.** Because a stealth address is used once or twice, nonces stay small, but a sender that reuses one stealth address sees all its transfers linked by that address (same as RD change risk).
-- **Inherited transfers are silent.** `transferByPartition`, operator and controller transfers do not announce, so a recipient is not told. Wallets must use `transferByPartitionStealth`.
+- **Inherited transfers are silent.** `transferByPartition`, operator and controller transfers do not announce, and neither do the inherited `issue` and `issueByPartition`. A recipient is told only if the custodian refuses to sign certificates for the silent paths and for inconsistent `(R, viewTag)` (section 4, step 3). Wallets using `transferByPartitionStealth` is necessary, but the custodian's signing policy is the real gate.
+- **Custodian burn power.** The custodian, as controller, can burn any holder's balance with no certificate through the inherited `operatorRedeemByPartition`.
+- **Certificate signers administer each other.** Any certificate signer can add or remove other signers, so a second signer key is a full signer admin.
 - **ERC1820 registry dependency** on the Besu network (section 6 pre-flight).
 - **Change stays on the sender's stealth address** after a partial send, like RD.
 - **Sender, amount, token and tranche are public.** Only the recipient is hidden. Dust announcements pass the `caller` filter like RD's; `balanceOfByPartition` is the authority.
