@@ -105,3 +105,7 @@ On chain only `S` appears; the link from `S` to bank B exists in the custodian's
 - **Sender, amount, token and tranche are public.** Only the recipient is hidden. Dust announcements pass the `caller` filter like RD's; `balanceOfByPartition` is the authority.
 - **For sub-project 4 (DvP):** the certificate binds `msgSender`, so a DvP contract that calls the bond is its own `msgSender` with its own nonce, and the custodian must sign for the DvP address; the DvP must hold the escrowed bonds and call `transferByPartitionStealth` itself so that `caller` is the token. Settlement confirmation reads balances, never metadata.
 - Gas price on this network is 0 (sub-project 1 smoke). `eth_getLogs` is range-capped; scanners page and checkpoint.
+
+## 8. Results
+
+- Pre-flight, 2026-10-15, ACK `besu` namespace via `besu-node-validator-1-0`: ERC1820 registry deployed at `0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24` (2501 bytes of runtime code) with the standard pre-signed transaction. The deployer funded the one-time sender with 0.08 ETH first (the deployer balance on this network is far above that). Besu accepted the unprotected transaction. A second run did nothing (idempotent), and the runtime code on Besu equals `stealth/test/fixtures/erc1820-runtime.hex`.
