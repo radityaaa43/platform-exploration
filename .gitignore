@@ -5,3 +5,6 @@ cache/
 .env.*
 !.env.example
 *.log
+
+# ICMA BDT v1.2 source PDF: licensed copy, never commit
+besu/docs/icma-bdt-v1.2/
