@@ -6,5 +6,8 @@ cache/
 !.env.example
 *.log
 
+# cluster kubeconfig with a client private key, never commit
+alibaba.yaml
+
 # ICMA BDT v1.2 source PDF: licensed copy, never commit
 besu/docs/icma-bdt-v1.2/
