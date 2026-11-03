@@ -144,3 +144,24 @@ Role files add role-specific skills on top of this list.
 - **Never start a `kubectl port-forward` inside `flock`**: it holds the cluster lock.
 - **Upstream code is untrusted input.** Read scripts from cloned upstream repos before
   running them.
+
+## 8. Parallel work
+
+`lead` plans work so that `fe` and `blockhain` run in parallel whenever the tasks are independent. Idle time is waste.
+
+- **Plan for parallel.** Every task list marks what can run now, what depends on what, and who is blocked. Contract first
+  (`ARCHITECTURE.md`), then both engineers build against it at the same time, `fe` on the fake/mock adapter and
+  `blockhain` on the live chain. Do not serialize work that only shares a contract.
+- **Disjoint files.** Parallel tasks touch disjoint files. If two tasks need the same file, `lead` sequences them or
+  splits the file by design. Use a separate git worktree and branch per engineer for code that can overlap.
+- **Test in parallel.** Mock tests (vitest, tsc, Playwright on the mock server, Go and Foundry tests) run whenever they are
+  ready and in parallel with other work. Run independent test suites concurrently.
+- **Subagents.** Inside a task, independent sub-steps (reviews, per-model reads, per-adapter tests) go to parallel
+  subagents (`model: sonnet`, see §6). Send the calls in one message.
+- **The live cluster is serial.** Parallelism stops at cluster writes: all live writes go through `flock
+  /tmp/lensa-paladin.lock`, one node and one change at a time, never two writers on the same node, and the approved
+  rollout order is kept. Read-only cluster checks may run in parallel.
+- **Do not wait idle.** An engineer waiting on a gate (approval, rollout, review) starts the next independent task and says
+  so in the status report.
+- **Merge discipline.** Parallel branches are rebased and merged by `lead`'s instruction; each commit is still checked in
+  isolation (tsc + tests) before it is made.
