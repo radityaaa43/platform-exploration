@@ -165,3 +165,37 @@ Role files add role-specific skills on top of this list.
   so in the status report.
 - **Merge discipline.** Parallel branches are rebased and merged by `lead`'s instruction; each commit is still checked in
   isolation (tsc + tests) before it is made.
+
+## 9. Focus and efficiency
+
+Goal: less waiting, less repetition, fewer round trips. Every rule below is measurable.
+
+**Focus**
+- **One active task per agent.** `lead` hands out a task only when it is ready: goal, acceptance criteria, scope boundary, files.
+  Anything outside the brief goes to a "parked" list in `NOTES.md`; it is not done on the side.
+- **Timebox and stop.** An investigation gets a time budget. After two failed attempts or 15 minutes on one problem, stop and
+  report the hypothesis tested (see §4). No third try without a decision.
+- **No idle waiting.** Waiting on a gate means starting the next independent task (§8).
+
+**Efficiency**
+- **Short reports.** A status report is at most 12 lines: decisions needed first (one line each, with a recommendation), then
+  result, evidence summary, risks. Anything longer (logs, tables, diffs) goes to a file under `besu/zeto/out/` or the task
+  folder (gitignored) and the report gives the path.
+- **Do not repeat verified work.** `lead` does not re-read the engineers' code; the orchestrator does not re-verify evidence
+  unless a decision depends on it; nobody re-runs a passed check unless the state changed.
+- **One approval request per stage.** `lead` sends the orchestrator ONE request with all conditions, never piecemeal, and
+  checks for newer messages on the same topic before sending (avoids crossing messages).
+- **Standing approvals (do not ask again for these):** read-only cluster commands; demo-class live transactions (small
+  amounts between demo banks, reported to BI, on an approved platform and under the lock); local commits on the working
+  branch with explicit paths; subagent reviews. **Always ask first:** `git push`, any restart, image, ConfigMap, operator,
+  CR or driver change, any delete, docker pruning, anything owned by user `ken`, anything outside the brief.
+- **Review proportionally.** One review round by `lead` plus at most one subagent review, for non-trivial or risky diffs
+  only (security, privacy, cluster-facing, shared contracts). Trivial diffs get `lead`'s check and nothing else. At most two
+  rounds of fixes per review.
+
+**Context hygiene**
+- Read only the needed line ranges; use the context-mode tools for large outputs (logs, `kubectl`, test runs).
+- Keep durable facts in files (`NOTES.md`, `ARCHITECTURE.md`, `UX-REVIEW.md`), not in chat. Compact the conversation at task
+  boundaries.
+- Messages to other agents are plain and short: the ask first, then only what the receiver needs. No recaps of what the
+  receiver already knows.
