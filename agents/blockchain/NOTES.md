@@ -4,17 +4,12 @@ Live state and hazards that the next session must know. Keep each entry dated an
 
 ## Paladin (ns paladin), updated 2026-11-03 04:10Z
 
-1. **OPEN: paladin-operator must stay at 0 replicas until S8.** All 4 StatefulSets now run the digest
-   `ghcr.io/radityaaa43/paladin@sha256:6f113f3829fefd7f954d3377935d7613ab78a90ba89c6af8e79159617b339f71`, but ConfigMap
-   `paladin-operator` `paladin.image` still says `ghcr.io/radityaaa43/paladin:main-zeto-v1-rsfix-1d600fc6f`. Scaling the
-   operator to 1 makes it rewrite every StatefulSet from that string (operator v1.0.0 copies the image verbatim on each
-   reconcile) and rolls all 4 nodes back to rsfix.
-   S8 (recommended, not approved yet): (a) drift proof per node: md5(cm/paladin-nodeN data.pldconf.paladin.yaml) ==
-   STS annotation core.paladin.io/config-sum, Paladin CR generation 7, svc/pdb/CR spec hashes unchanged (baseline in
-   besu/zeto/out/stuck-tx-backup-20261103T040501Z/P0-evidence.txt); (b) back up the CM; (c) patch only
-   data.config.json with paladin.image = the digest, byte-identical to the 4 STS strings, and prove that the parsed diff
-   is that one path; (d) scale the operator to 1; (e) 5 min: same pod uids and restart counts, STS images unchanged,
-   no "Updated Paladin StatefulSet" in the operator log. Rollback: scale the operator to 0 first.
+1. RESOLVED 2026-11-03 04:19Z (S8): the paladin-operator is back at 1 replica. ConfigMap `paladin-operator`
+   `paladin.image` = `ghcr.io/radityaaa43/paladin@sha256:6f113f3829fefd7f954d3377935d7613ab78a90ba89c6af8e79159617b339f71`,
+   byte-identical to all 4 StatefulSets; the 5-min watch showed no pod restart and no StatefulSet update. Operator v1.0.0
+   copies that string verbatim into every StatefulSet on reconcile, so any future image change goes ConfigMap first
+   (byte-identical string), or the operator is paused (scale 0) before a per-node `set image`. CM backups:
+   besu/zeto/out/s8-20261103T041331Z/.
 2. RESOLVED 2026-11-03: mixed fleet. node1 moved to the digest at 04:05Z (node2/3/4 earlier), so all 4 nodes run prepfix2.
 3. Ceiling with prepfix2: a prepare-only transaction (Zeto prepareSpendLock, any submitMode external) stays in the
    coordinator's memory until the pod restarts. About 500 (`maxInflightTransactions`) per (node, token contract) per pod
