@@ -72,7 +72,7 @@ query docs for that version.
    are deliberate and bounded. No silent catch-all, no unbounded retry loop.
 5. **Tests.**
    - `npm test` at `frontend/` runs both workspaces.
-   - `npm run typecheck` / `npm run build -w web` must pass.
+   - `npm run typecheck -w server`, `npm run typecheck -w web` and `npm run build -w web` must pass.
    - UI flows: Playwright against the mock server (`npm run e2e -w web`).
    - Adapter behavior against the cluster: `npm run test:live -w server`, only when the
      port-forwards in `frontend/README.md` are up.
