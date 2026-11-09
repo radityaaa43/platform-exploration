@@ -1,15 +1,18 @@
 import { randomUUID } from 'node:crypto';
-import type { Capability, Counterparty, FlowResult, LensView, ModelAdapter, StepEvent, Verdict } from '../adapter.ts';
-import { CANCELLED, LOAD_AMOUNT } from '../adapter.ts';
+import type { Capability, Counterparty, FlowResult, HistoryItem, LensView, ModelAdapter, StepEvent, Verdict } from '../adapter.ts';
+import { CANCELLED, HISTORY_MAX, LOAD_AMOUNT } from '../adapter.ts';
 import { DeadlineError, withDeadline } from '../deadline.ts';
-import { BANKS, FLOWS, PARTIES, PRICE_PER_UNIT, roleOf, type BankId, type FlowId, type FlowRequest, type PartyId } from '../domain.ts';
+import { BANKS, FLOWS, PARTIES, PRICE_PER_UNIT, roleFromParties, roleOf, type BankId, type FlowId, type FlowRequest, type PartyId } from '../domain.ts';
 import { readState } from '../state.ts';
+import { notoDrift } from '../policy/noto-config.ts';
+import { besuNetwork, besuReceipt, paladinNodeReceipt } from './besu-network.ts';
+import { besuTrace, nameFrom } from './besu-trace.ts';
 import type { Sample } from '../stats.ts';
 // Everything Paladin goes through the bond project's modules (its SDK 1.0.0 copy is the only one in play).
 import { appendTrade, loadPlatform, type Platform } from '../../../../besu/noto+pente/bond/src/lib/platform.ts';
 import { transferNoto } from '../../../../besu/noto+pente/bond/src/lib/transfer.ts';
 import { issueBond, issueCash } from '../../../../besu/noto+pente/bond/src/lib/issue.ts';
-import { executeOutright } from '../../../../besu/noto+pente/bond/src/lib/outright.ts';
+import { custodianOf, executeOutright } from '../../../../besu/noto+pente/bond/src/lib/outright.ts';
 import { readNotoTx, readStateHashes, readTxReceipt, tradeSpendTxIds, waitTxIndexed, watchDispatch, type NotoTxView } from '../../../../besu/noto+pente/bond/src/lib/receipts.ts';
 
 const DEADLINE = 120_000;
@@ -40,9 +43,169 @@ export async function exclusive<T>(senders: PartyId[], fn: (hold: (p: Promise<un
 
 interface NotoContext { txIds: string[] } // plain flows: [tx]; dvp: [bond-leg spend tx, cash-leg spend tx]
 
+// History (ARCHITECTURE.md §2.3). A party's own node lists the base-ledger txs it indexed for the cash and bond contracts
+// (ptx_queryTransactionReceipts: `source` is the Noto contract, every node has the receipts, outsiders included). Tx that move
+// tokens emit the Noto `Transfer` event (mint, transfer) or `NotoLockSpent` (a spent lock: the DvP legs); lock / delegateLock /
+// prepareUnlock emit only other Lock* events and are not listed (checked live on cash, bond and a DvP). A DvP settles both legs in
+// one base-ledger tx (two receipts, two NotoLockSpent events), so legs with one hash are one item.
+const TRANSFER_TOPIC = '0x5c8f21be56ffd5f821a2df89667130d3c251c8df22c0d4b1f3677b4b54bb707b';
+const LOCK_SPENT_TOPIC = '0x1c3e771c022f9501e48b0c09f0bac40132cc0aac211f5b33e3dbd4d8eaff039c';
+const RECEIPT_PAGE = 100;
+// ponytail: page cap on the receipt scan, add a contract-level index if real volume needs it
+const SCAN_PAGES_MAX = 3;
+const EVENT_CHUNK = 25; // tx hashes per event query
+const EVENT_LIMIT = 1000;
+const READ_GROUPS = 4; // groups (at most 2 legs each) read in parallel
+
+export { receiptPage, type ReceiptLike } from './besu-network.ts';
+import type { ReceiptLike } from './besu-network.ts';
+import { holdBack, receiptPage } from './besu-network.ts';
+
+export interface NotoLeg { source: 'cash' | 'bond'; read: NotoTxView }
+export interface NotoGroup { hash: string; block: number; at: string | null; legs: NotoLeg[]; dvp?: boolean } // dvp: the events say two locks were spent
+
+// The DFABI seller of a dvp-type flow: BI's custodian for an award (its unsold supply), else the selling bank's investor.
+export const sellerFor = (p: Platform, req: FlowRequest) => (req.flow === 'award' ? custodianOf(p) : p.investors.get(INVESTOR[req.from as BankId])!);
+
+// One base-ledger tx as the party's own node reads it. `known` maps an address / lookup to its party.
+export function notoItem(party: PartyId, g: NotoGroup, known: Map<string, PartyId>): HistoryItem {
+  const bond = g.legs.find((l) => l.source === 'bond');
+  const cash = g.legs.find((l) => l.source === 'cash');
+  const dvp = g.dvp === true || (g.legs.length === 2 && !!bond && !!cash);
+  if (!g.legs.some((l) => l.read.visible)) { // the node knows the tx exists and holds none of its private state
+    return { id: g.hash, at: g.at, block: g.block, flow: null, asset: null, role: roleFromParties(party, null, false), verdict: 'sealed', amount: null, rdAmount: null, counterparty: null };
+  }
+  const who = (xs: string[]) => { const s = new Set(xs.map((a) => known.get(a) ?? null)); return s.size === 1 ? [...s][0]! : null; };
+  // A node that cannot read the locked inputs of a DvP leg sees no `from`, only the receipt's sender (the owner of the lock); a mint has the issuer as sender.
+  const side = (r: NotoTxView) => ({ from: who(r.from.length ? r.from : r.sender ? [r.sender] : []), to: who(r.to) });
+  let counterparty: Counterparty | null;
+  if (dvp) { // seller -> buyer: the bond leg says so; if only the cash leg is readable, it runs the other way (buyer pays seller)
+    const c = bond?.read.visible ? side(bond.read) : cash?.read.visible ? (({ from, to }) => ({ from: to, to: from }))(side(cash.read)) : null;
+    counterparty = c;
+  } else counterparty = side(g.legs[0]!.read);
+  const main = dvp ? bond : g.legs[0]!;
+  // award: the bond leg's seller is BI's custodian (BI sells unsold supply). Read only from real owners (the bond leg's locked
+  // inputs, or the cash leg's recipient), never from the receipt sender: the custodian executes the atom of every DvP.
+  const seller = bond?.read.visible && bond.read.from.length ? who(bond.read.from) : cash?.read.visible && cash.read.to.length ? who(cash.read.to) : null;
+  const award = dvp && seller === 'BI';
+  const asset = dvp ? 'DFABI' : main!.source === 'cash' ? 'RD' : 'DFABI';
+  // DFABI issuance is a transfer from BI's custodian (BondTracker only mints to the custodian), so "from BI" is an issue too.
+  const issue = !dvp && counterparty?.from === 'BI';
+  const role = roleFromParties(party, counterparty, issue || award);
+  const amountOf = (l?: NotoLeg) => (l?.read.visible ? (l.read.amount?.toString() ?? null) : null);
+  return {
+    id: g.hash, at: g.at, block: g.block,
+    flow: award ? 'award' : dvp ? 'dvp' : (`${asset === 'RD' ? 'rd' : 'dfabi'}-${issue ? 'issue' : 'transfer'}` as FlowId), asset, role,
+    verdict: party === 'BI' && !issue && !award ? 'notarised' : 'clear',
+    amount: amountOf(main),
+    rdAmount: dvp ? amountOf(cash) : null,
+    counterparty,
+  };
+}
+
+// What the history scan needs, injectable for tests. The cache lives as long as the adapter.
+export interface EventLike { transactionHash: string; signature: string; block?: { timestamp?: string } }
+export interface NotoClient {
+  ptx: { queryTransactionReceipts(q: object): Promise<ReceiptLike[]> };
+  bidx: { queryIndexedEvents(q: object): Promise<EventLike[]> };
+}
+export interface NotoCache { events: Map<string, { movement: boolean; lockSpent: number; at: string | null }>; reads: Map<string, NotoTxView>; firstSeen: Map<string, number> }
+export const newNotoCache = (): NotoCache => ({ events: new Map(), reads: new Map(), firstSeen: new Map() });
+export interface NotoScan {
+  client: NotoClient;
+  readTx: (id: string) => Promise<NotoTxView>;
+  cashSource: string; // lower-case, no 0x
+  sources: string[]; // lower-case, no 0x: cash and bond
+  known: Map<string, PartyId>;
+  cache: NotoCache;
+  now?: () => number;
+  pageSize?: number;
+}
+
+export async function notoHistory(party: PartyId, want: number, c: NotoScan): Promise<HistoryItem[] & { truncated?: true; pending?: string[] }> {
+  const now = c.now ?? Date.now;
+  const pageSize = c.pageSize ?? RECEIPT_PAGE;
+  const items: HistoryItem[] = [];
+  const pending: string[] = []; // held back as too fresh to call sealed
+  const done = new Set<string>(); // base-ledger txs already handled: a completed boundary tx shows up again on the next page
+  let cursor: number | undefined;
+  let newest: number | undefined;
+  let more = true;
+  let pages = 0;
+  while (items.length < want && more && pages < SCAN_PAGES_MAX) {
+    pages++;
+    const receipts = await receiptPage(c.client, {
+      limit: pageSize, sort: ['sequence DESC'], eq: [{ field: 'domain', value: 'noto' }], in: [{ field: 'source', values: c.sources }], // the receipt filter takes the address without 0x
+      ...(cursor === undefined ? {} : { lt: [{ field: 'sequence', value: cursor }] }),
+    }, pageSize, c.sources);
+    const pageRows = receipts.slice(0, pageSize); // the rows after pageSize are the completed boundary tx
+    more = pageRows.length === pageSize;
+    if (pageRows.length) cursor = pageRows[pageRows.length - 1]!.sequence;
+    newest ??= receipts[0]?.blockNumber;
+    const byHash = new Map<string, ReceiptLike[]>();
+    for (const r of receipts) if (!done.has(r.transactionHash)) byHash.set(r.transactionHash, [...(byHash.get(r.transactionHash) ?? []), r]);
+
+    // Events: movement test, DvP hint and block time. Never cached as "not a movement" without having seen the tx's events.
+    const fresh = [...byHash.keys()].filter((h) => !c.cache.events.has(h));
+    for (let i = 0; i < fresh.length; i += EVENT_CHUNK) {
+      const chunk = fresh.slice(i, i + EVENT_CHUNK);
+      const events = await c.client.bidx.queryIndexedEvents({ limit: EVENT_LIMIT, in: [{ field: 'transactionHash', values: chunk }] });
+      if (events.length >= EVENT_LIMIT) throw new Error('Terlalu banyak event untuk satu halaman riwayat Noto');
+      for (const h of chunk) {
+        const mine = events.filter((e) => e.transactionHash === h);
+        if (!mine.length) throw new Error(`Node belum mengindeks event transaksi ${h}`);
+        c.cache.events.set(h, {
+          movement: mine.some((e) => e.signature === TRANSFER_TOPIC || e.signature === LOCK_SPENT_TOPIC),
+          lockSpent: mine.filter((e) => e.signature === LOCK_SPENT_TOPIC).length,
+          at: mine.find((e) => e.block?.timestamp)?.block?.timestamp ?? null,
+        });
+      }
+    }
+
+    const groups = [...byHash].filter(([h]) => c.cache.events.get(h)!.movement);
+    for (const [h] of byHash) done.add(h);
+    for (let i = 0; i < groups.length && items.length < want; i += READ_GROUPS) {
+      const batch = groups.slice(i, i + READ_GROUPS);
+      // Reads of a visible tx are cached; an unreadable one is not (its private state may still arrive).
+      const reads = await Promise.all(batch.map(([, rs]) => Promise.all(rs.map(async (r) => {
+        const key = `${party}|${r.id}`;
+        const hit = c.cache.reads.get(key);
+        if (hit) return hit;
+        const read = await c.readTx(r.id);
+        if (read.visible) c.cache.reads.set(key, read);
+        return read;
+      }))));
+      batch.forEach(([hash, rs], k) => {
+        if (items.length >= want) return;
+        const info = c.cache.events.get(hash)!;
+        const legs: NotoLeg[] = rs.map((r, j) => ({ source: r.source.toLowerCase().replace(/^0x/, '') === c.cashSource ? 'cash' : 'bond', read: reads[k]![j]! }));
+        if (!legs.some((l) => l.read.visible)) {
+          // Neither sealed nor listed while it is fresh: the node stores the private state a moment after the receipt. Age is this
+          // process's own first-seen moment (a validator's block time would add clock skew), and a missing block time never seals.
+          if (holdBack(c.cache.firstSeen, `${party}|${hash}`, rs[0]!.blockNumber, newest ?? 0, now())) { pending.push(hash); return; }
+        }
+        const item = notoItem(party, { hash, block: rs[0]!.blockNumber, at: info.at, legs, dvp: info.lockSpent >= 2 }, c.known);
+        if (!items.some((x) => x.id === item.id)) items.push(item);
+      });
+    }
+  }
+  return Object.assign(items, more && pages >= SCAN_PAGES_MAX && items.length < want ? { truncated: true as const } : {}, pending.length ? { pending } : {});
+}
+
+// BI holds an asset under two identities (cash issuer, bond custodian): its balance is the sum over both, read from its own node.
+export async function biBalance(token: { balanceOf(v: { lookup: string }, o: { account: string }): Promise<{ totalBalance: string | number | bigint }> }, identities: { lookup: string }[], asset: string): Promise<bigint> {
+  const distinct = [...new Map(identities.map((v) => [v.lookup, v])).values()]; // one identity under both roles counts once
+  const parts = await Promise.all(distinct.map(async (v) => BigInt((await withDeadline(token.balanceOf(v, { account: v.lookup }), BALANCE_MS, `Saldo ${asset} BI`)).totalBalance)));
+  return parts.reduce((a, b) => a + b, 0n);
+}
+
 export function createNotoAdapter(dataDir: string): ModelAdapter {
   let platform: Promise<Platform> | undefined;
-  const plat = () => (platform ??= loadPlatform(dataDir).catch((e) => { platform = undefined; throw e; }));
+  const plat = () => (platform ??= loadPlatform(dataDir).catch((e) => {
+    platform = undefined;
+    console.error('[noto] platform tidak dapat dimuat:', e); // the library's message names the data dir: the UI gets a fixed text
+    throw new Error('Data platform Noto tidak dapat dimuat (lihat log server)');
+  }));
 
   const bank = (p: Platform, id: BankId) => p.investors.get(INVESTOR[id])!;
   const clientOf = (p: Platform, party: PartyId) => (party === 'BI' ? p.node1 : bank(p, party).client);
@@ -50,10 +213,7 @@ export function createNotoAdapter(dataDir: string): ModelAdapter {
   async function balanceOf(party: PartyId, asset: 'RD' | 'DFABI'): Promise<bigint> {
     const p = await plat();
     const token = asset === 'RD' ? p.notoCash : p.notoBond;
-    if (party === 'BI') {
-      const v = asset === 'RD' ? p.node1.getVerifiers(p.data.participants.cashIssuer)[0] : p.bondCustodian;
-      return BigInt((await withDeadline(token.balanceOf(v, { account: v.lookup }), BALANCE_MS, `Saldo ${asset} BI`)).totalBalance);
-    }
+    if (party === 'BI') return biBalance(token, [p.node1.getVerifiers(p.data.participants.cashIssuer)[0]!, p.bondCustodian], asset);
     const b = bank(p, party);
     return BigInt((await withDeadline(token.using(b.client).balanceOf(b.verifier, { account: b.verifier.lookup }), BALANCE_MS, `Saldo ${asset} ${party}`)).totalBalance);
   }
@@ -105,7 +265,7 @@ export function createNotoAdapter(dataDir: string): ModelAdapter {
     };
 
     if (flow.dvp) {
-      const seller = bank(p, req.from as BankId), buyer = bank(p, to);
+      const seller = sellerFor(p, req), buyer = bank(p, to);
       const tradeId = randomUUID();
       let executedAt: number | undefined;
       const log = (m: string) => {
@@ -154,6 +314,18 @@ export function createNotoAdapter(dataDir: string): ModelAdapter {
     return { txHash: receipt.transactionHash, block: receipt.blockNumber, steps, context: { txIds: [receipt.id] } satisfies NotoContext };
   }
 
+  const notoCache = newNotoCache();
+  async function history(party: PartyId, limit: number): Promise<HistoryItem[] & { truncated?: true; pending?: string[] }> {
+    if (!Number.isInteger(limit) || limit < 1) throw new Error('limit harus bilangan bulat >= 1');
+    const p = await plat();
+    const client = clientOf(p, party);
+    const bare = (a: string) => a.toLowerCase().replace(/^0x/, '');
+    return notoHistory(party, Math.min(limit, HISTORY_MAX), {
+      client: client as unknown as NotoClient, readTx: (id) => readNotoTx(client, id), known: await partyKeys(), cache: notoCache,
+      cashSource: bare(p.data.notoCashAddress), sources: [bare(p.data.notoCashAddress), bare(p.data.notoBondAddress)],
+    });
+  }
+
   const adapter: ModelAdapter = {
     id: 'noto',
     stepLabels: ['Notary BI memeriksa', 'Kirim ke node Paladin', 'Masuk block Besu', 'State dibagikan ke pihak terkait'],
@@ -163,6 +335,8 @@ export function createNotoAdapter(dataDir: string): ModelAdapter {
     async health() {
       try {
         const p = await withDeadline(plat(), 10_000, 'Memuat platform Noto');
+        const drift = notoDrift(p.data);
+        if (drift) return { ready: false, detail: drift };
         const nodes = [p.node1, ...BANKS.map((b) => bank(p, b).client)];
         const down: number[] = [];
         await Promise.all(nodes.map((c, i) => withDeadline(c.ptx.queryTransactions({ limit: 1 }), NODE_PROBE_MS, `Node ${i + 1}`).catch(() => { down.push(i + 1); })));
@@ -207,8 +381,10 @@ export function createNotoAdapter(dataDir: string): ModelAdapter {
         ...hashes.outputs.map((value) => ({ label: 'Output state', value })),
       ];
       const note = req.flow === 'dfabi-issue' ? ' Penerbitan DFABI di Noto = transfer dari kustodian BI (unit belum terjual), karena BondTracker hanya mencetak ke kustodian.' : '';
+      // dvp: txIds = [bond-leg spend tx, cash-leg spend tx], so reads[1] is the RD leg when this node can read it
+      const rdLeg = FLOWS[req.flow].dvp && reads[1]?.visible ? reads[1].amount : undefined;
       const view = (verdict: Verdict, amount: bigint | undefined, counterparty: Counterparty | null, method: string): LensView =>
-        ({ party, role, verdict, amount: amount === undefined ? null : amount.toString(), counterparty, onChain, method: method + note });
+        ({ party, role, verdict, amount: amount === undefined ? null : amount.toString(), rdAmount: rdLeg === undefined || !visible ? null : rdLeg.toString(), counterparty, onChain, method: method + note });
 
       if (!visible) {
         return view('sealed', undefined, null,
@@ -231,6 +407,16 @@ export function createNotoAdapter(dataDir: string): ModelAdapter {
           : 'Query state privat di node sendiri (`ptx.getDomainReceipt`).');
     },
 
+    history,
+    network: () => besuNetwork({ paladin: true }),
+    trace: async (tx, party) => {
+      const { data } = await plat();
+      return besuTrace(tx, party, { paladin: true, name: nameFrom({ [data.notoCashAddress.toLowerCase()]: 'RD', [data.notoBondAddress.toLowerCase()]: 'DFABI' }) });
+    },
+    receipt: async (tx, party) => {
+      const [chain, node] = await Promise.all([besuReceipt(tx), paladinNodeReceipt(party, tx)]); // public receipt + the party's own Paladin node
+      return { ...chain, node };
+    },
     async loadCapacity() {
       const balances = await Promise.all(BANKS.map((b) => balanceOf(b, 'RD')));
       return 3 * Number(balances.reduce((m, x) => (x < m ? x : m)) / LOAD_AMOUNT);

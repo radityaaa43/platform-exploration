@@ -1,21 +1,25 @@
 import { randomBytes } from 'node:crypto';
-import type { Capability, Counterparty, FlowResult, LensView, ModelAdapter, StepEvent } from '../adapter.ts';
-import { CANCELLED, LOAD_AMOUNT } from '../adapter.ts';
-import { BANKS, FLOWS, PRICE_PER_UNIT, roleOf, type BankId, type FlowId, type PartyId } from '../domain.ts';
+import type { Capability, Counterparty, FlowResult, HistoryItem, LensView, ModelAdapter, StepEvent } from '../adapter.ts';
+import { CANCELLED, HISTORY_MAX, LOAD_AMOUNT } from '../adapter.ts';
+import { besuNetwork, besuReceipt } from './besu-network.ts';
+import { besuTrace, nameFrom } from './besu-trace.ts';
+import { BANKS, FLOWS, PRICE_PER_UNIT, roleFromParties, roleOf, type BankId, type FlowId, type PartyId } from '../domain.ts';
 import { DeadlineError, withDeadline } from '../deadline.ts';
 import type { Sample } from '../stats.ts';
-import { readState, writeState } from '../state.ts';
+import { STATE_DIR, readState, writeState } from '../state.ts';
+import { gwAgent, gwUrl } from '../gateway.ts';
 // Server code never imports ethers itself: everything chain-related comes from stealth-address, so one ethers copy is in play.
 import {
-  Contract, JsonRpcProvider, TRANCHE_A, Wallet, announcements, artifact, biRows, cert, chainNow, contracts, pay, read,
+  Contract, FetchRequest, JsonRpcProvider, TRANCHE_A, Wallet, announcements, artifact, biRows, cert, chainNow, contracts, pay, read,
   type Deployed, type LoggedAnnouncement,
 } from '../../../../besu/stealth-address/ts/chain.ts';
 import { parseBondMetadata } from '../../../../besu/stealth-address/ts/bond.ts';
 import { openMemo } from '../../../../besu/stealth-address/ts/memo.ts';
-import { scan, scanView, type Found, type ViewKeyHolder } from '../../../../besu/stealth-address/ts/stealth.ts';
+import { generateMetaAddress, scan, scanView, type Found, type ViewKeyHolder } from '../../../../besu/stealth-address/ts/stealth.ts';
 import { parseTokenMetadata } from '../../../../besu/stealth-address/ts/token.ts';
 
 export interface BankKeys { spendKey: string; viewKey: string; metaAddress: string; identityKey: string }
+export interface BiMeta { spendKey: string; viewKey: string; metaAddress: string }
 export interface PoolEntry { stealthAddress: string; privateKey: string; used: boolean }
 export interface StealthState {
   chainId: bigint;
@@ -23,6 +27,7 @@ export interface StealthState {
   rpcUrl?: string; // Besu endpoint the stack was deployed on; load() reconnects to it
   deployed: Deployed;
   banks: Record<BankId, BankKeys>;
+  biMeta?: BiMeta; // BI's own stealth receive keys (award: BI is the seller and gets the RD leg); added by ensureBiKeys, absent = award disabled
   pool: Record<string, PoolEntry[]>; // 'A>B': funded stealth addresses of A reserved for the stress test
 }
 
@@ -33,6 +38,13 @@ const TX_MS = 120_000;
 const HEALTH_MS = 2000;
 const ESCROW_TTL = 600n; // seconds; the escrow is settled right away, the window only has to outlast the run
 const NO_BALANCE = 'Saldo di satu alamat stealth tidak cukup';
+const NO_BI_KEY = 'BI belum punya kunci penerima stealth';
+// History window (ARCHITECTURE.md §2.3). Measured 2026-11-02 against the live Besu: block time 2.0 s, head 1,965,520, a 1000-block
+// eth_getLogs page takes 5-15 ms and the announcer holds about 7 announcements per 1000 blocks. 100,000 blocks is about 2.3 days of
+// chain, 100 pages per token (about 1-2 s cold, incremental after) and about 700 announcements to scan per bank. Transactions older
+// than the window are visible to no party (the UI labels the window).
+export const STEALTH_HISTORY_BLOCKS = 100_000;
+const LOG_PAGE = 1000; // Besu rejects eth_getLogs spans of 5000 (chain.ts)
 const lc = (s: string) => s.toLowerCase();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -56,13 +68,49 @@ export function checkOwnTx(
   }
 }
 
-export function createStealthAdapter(state: StealthState, rpcUrl = state.rpcUrl ?? 'http://127.0.0.1:8545'): ModelAdapter {
-  const provider = new JsonRpcProvider(rpcUrl, undefined, { cacheTimeout: -1 });
+// Operator step, run once with the server stopped (the server rewrites state/stealth.json from memory): adds BI's stealth
+// receive keypair to the state if it is missing. Idempotent; never prints or returns key material. true = added.
+export function ensureBiKeys(dir = STATE_DIR): boolean {
+  const s = readState<StealthState>('stealth', dir);
+  if (!s) throw new Error('state/stealth.json tidak ada: jalankan npm run bootstrap -- stealth');
+  if (s.biMeta) return false;
+  const { spendKey, viewKey, metaAddress } = generateMetaAddress();
+  writeState('stealth', { ...s, biMeta: { spendKey, viewKey, metaAddress } }, dir);
+  return true;
+}
+
+// BI's DFABI inventory (ARCHITECTURE.md §7.1): sell from the smallest BI address that covers the award; otherwise one top-up issue
+// of max(TOP_UP_MIN, amount) to one fresh BI address. `balances` are the free (not busy) BI addresses.
+export const TOP_UP_MIN = 1000n;
+export function planInventory(balances: bigint[], amount: bigint): { use: number } | { issue: bigint } {
+  let best = -1;
+  balances.forEach((b, i) => { if (b >= amount && (best < 0 || b < balances[best]!)) best = i; });
+  return best >= 0 ? { use: best } : { issue: amount > TOP_UP_MIN ? amount : TOP_UP_MIN };
+}
+
+// History label of a tx with a seller: a dvp sold by BI is an award (never 'dvp'); without an RD leg BI as sender is an issue.
+export function flowLabel(dvp: boolean, kind: 'rd' | 'bond', fromBI: boolean): FlowId {
+  return dvp ? (fromBI ? 'award' : 'dvp') : (`${kind === 'rd' ? 'rd' : 'dfabi'}-${fromBI ? 'issue' : 'transfer'}` as FlowId);
+}
+
+// With gateway mTLS on (gateway.ts) ethers must present the client cert: its FetchRequest takes an https agent.
+export function besuRequest(url: string): string | FetchRequest {
+  const agent = gwAgent();
+  if (!agent) return url;
+  const req = new FetchRequest(url);
+  req.getUrlFunc = FetchRequest.createGetUrlFunc({ agent });
+  return req;
+}
+
+// LENSA_BESU_RPC (the gateway's Besu door) wins over the URL the stack was deployed on (state.rpcUrl).
+export function createStealthAdapter(state: StealthState, rpcUrl = gwUrl(process.env.LENSA_BESU_RPC ?? state.rpcUrl ?? 'http://127.0.0.1:8545')): ModelAdapter {
+  const provider = new JsonRpcProvider(besuRequest(rpcUrl), undefined, { cacheTimeout: -1 });
   const { deployed: d, chainId, banks } = state;
   const bi = new Wallet(state.deployerKey, provider);
   const reader = contracts(d, provider);
   const asBi = contracts(d, bi);
   const holders: ViewKeyHolder[] = BANKS.map((b) => ({ id: b, viewKey: banks[b].viewKey, metaAddress: banks[b].metaAddress }));
+  const biKeys = state.biMeta && { ...state.biMeta, identityKey: state.deployerKey }; // BI as a dvp seller
   const identity = new Map<string, PartyId>([[lc(bi.address), 'BI'], ...BANKS.map((b): [string, PartyId] => [lc(new Wallet(banks[b].identityKey).address), b])]);
   const partyOf = (addr: string | null): PartyId | null => (addr === null ? null : identity.get(lc(addr)) ?? null);
 
@@ -115,6 +163,13 @@ export function createStealthAdapter(state: StealthState, rpcUrl = state.rpcUrl 
     return found.map((f, i) => ({ ...f, balance: bals[i] }));
   }
 
+  // BI's own stealth addresses holding the asset (DFABI inventory, RD award receipts), found with BI's view key like a bank's.
+  async function biHoldings(asset: 'RD' | 'DFABI' = 'DFABI'): Promise<Holding[]> {
+    const found = scan(ofToken(await refresh(), tokenOf(asset)), biKeys!.viewKey, biKeys!.spendKey);
+    const bals = await Promise.all(found.map((f) => balance(asset, f.stealthAddress)));
+    return found.map((f, i) => ({ ...f, balance: bals[i] }));
+  }
+
   // Smallest single address that covers `need`; marked busy until released so two runs never spend the same address.
   const busy = new Set<string>();
   async function claim(bank: BankId, asset: 'RD' | 'DFABI', need: bigint): Promise<Holding> {
@@ -129,6 +184,61 @@ export function createStealthAdapter(state: StealthState, rpcUrl = state.rpcUrl 
   }
 
   const parse = (kind: 'rd' | 'bond', md: string) => (kind === 'rd' ? parseTokenMetadata(md) : parseBondMetadata(md));
+
+  // What a bank received: its stealth addresses among the announcements of the window, scanned incrementally (the cache only grows).
+  // What it sent: a bank's own sends are not in the announcement log (the memo is encrypted to the receiver); the token Transfer logs
+  // of the window show every spend. Instead of scanning every announcement ever made, only the announcements of the addresses
+  // that SPENT in the window are tested with the bank's keys (a spender is controlled by the bank iff it derives from one of them).
+  const receivedCache = new Map<BankId, { n: number; set: Set<string> }>();
+  async function receivedBy(bank: BankId, lo: number): Promise<Set<string>> {
+    const anns = await refresh();
+    const c = receivedCache.get(bank) ?? { n: Math.max(0, anns.findIndex((a) => a.blockNumber >= lo) === -1 ? anns.length : anns.findIndex((a) => a.blockNumber >= lo)), set: new Set<string>() };
+    if (c.n < anns.length) { for (const f of scan(anns.slice(c.n), banks[bank].viewKey, banks[bank].spendKey)) c.set.add(lc(f.stealthAddress)); c.n = anns.length; }
+    receivedCache.set(bank, c);
+    return c.set;
+  }
+  const spends = { upTo: -1, byTx: new Map<string, Set<string>>() }; // tx hash -> the `from` addresses of its token Transfer logs (lower-case)
+  let spendsTail: Promise<unknown> = Promise.resolve(); // one scan at a time: parallel callers would read the same pages twice
+  const spendsSince = (lo: number, head: number) => { const r = spendsTail.then(() => readSpends(lo, head)); spendsTail = r.catch(() => {}); return r; };
+  async function readSpends(lo: number, head: number) {
+    if (spends.upTo < 0) spends.upTo = lo - 1;
+    for (let from = spends.upTo + 1; from <= head; from += LOG_PAGE) {
+      const to = Math.min(from + LOG_PAGE - 1, head);
+      for (const token of [reader.rd, reader.bond]) {
+        for (const l of await token.queryFilter(token.filters.Transfer(), from, to)) {
+          const set = spends.byTx.get(l.transactionHash) ?? new Set<string>();
+          set.add(lc((l as unknown as { args: { from: string } }).args.from));
+          spends.byTx.set(l.transactionHash, set);
+        }
+      }
+      spends.upTo = Math.max(spends.upTo, to); // per page: an RPC failure later keeps what was read
+    }
+    return spends.byTx;
+  }
+  const controlled = new Map<BankId, Map<string, boolean>>(); // per bank: spender address -> derives from one of its announcements?
+  async function sentTxs(bank: BankId, lo: number, head: number): Promise<Set<string>> {
+    const byTx = await spendsSince(lo, head);
+    const known = controlled.get(bank) ?? new Map<string, boolean>();
+    for (const [k, es] of Object.entries(state.pool)) if (k.startsWith(`${bank}>`)) for (const e of es) known.set(lc(e.stealthAddress), true);
+    const unknown = new Set([...byTx.values()].flatMap((s) => [...s]).filter((x) => !known.has(x)));
+    if (unknown.size) {
+      const cands = (await refresh()).filter((a) => unknown.has(lc(a.stealthAddress)));
+      const mine = new Set(scan(cands, banks[bank].viewKey, banks[bank].spendKey).map((f) => lc(f.stealthAddress)));
+      for (const x of unknown) known.set(x, mine.has(x));
+    }
+    controlled.set(bank, known);
+    return new Set([...byTx].filter(([, es]) => [...es].some((x) => known.get(x))).map(([tx]) => tx));
+  }
+  const blockTime = new Map<number, string>(); // block times never change
+  async function atOf(block: number): Promise<string> {
+    const hit = blockTime.get(block);
+    if (hit) return hit;
+    const b = await provider.getBlock(block);
+    if (!b) throw new Error(`Block ${block} tidak ditemukan`);
+    const at = new Date(b.timestamp * 1000).toISOString();
+    blockTime.set(block, at);
+    return at;
+  }
   const txAnnouncements = async (block: number, txHash: string, kind: 'rd' | 'bond') =>
     (await announcements(provider, d, block, null, block)).filter((a) => a.txHash === txHash && parse(kind, a.metadata) !== null);
   const onChain = (txHash: string, stealthAddress: string, memo: string, amount: bigint) => [
@@ -138,6 +248,8 @@ export function createStealthAdapter(state: StealthState, rpcUrl = state.rpcUrl 
 
   async function run(req: Parameters<ModelAdapter['run']>[0], amount: bigint, onStep: (s: StepEvent) => void): Promise<FlowResult> {
     const flow = FLOWS[req.flow];
+    const award = req.flow === 'award';
+    if (award && !biKeys) throw new Error(NO_BI_KEY);
     const steps: StepEvent[] = [];
     const step = async <T>(index: number, fn: () => Promise<T>): Promise<T> => {
       const t0 = performance.now();
@@ -150,6 +262,30 @@ export function createStealthAdapter(state: StealthState, rpcUrl = state.rpcUrl 
     const gp = await gasPrice();
     const taken: string[] = [];
     const take = async (bank: BankId, asset: 'RD' | 'DFABI', need: bigint) => { const h = await claim(bank, asset, need); taken.push(lc(h.stealthAddress)); return h; };
+    // Award: the escrow's seller leg is one BI inventory address that holds enough. Short of that, one top-up tx (max(1000, amount)) first.
+    const biSeller = async (): Promise<Found> => {
+      const free = (await biHoldings()).filter((h) => !busy.has(lc(h.stealthAddress)));
+      const plan = planInventory(free.map((h) => h.balance), amount);
+      let own: Found | undefined;
+      if ('use' in plan) {
+        own = free[plan.use]!;
+        busy.add(lc(own.stealthAddress)); // re-read now that it is ours, as claim() does
+        let enough = false;
+        try { enough = (await balance('DFABI', own.stealthAddress)) >= amount; } finally { if (!enough) busy.delete(lc(own.stealthAddress)); }
+        if (!enough) own = undefined;
+      }
+      // The top-up is not guarded here: app.ts admits one tx at a time (its synchronous busy = 'tx' lock), so two awards never race for it.
+      if (!own) {
+        const { issue } = planInventory([], amount) as { issue: bigint }; // empty inventory: the same top-up rule
+        const p = pay(chainId, biKeys!.metaAddress, state.deployerKey, d.bond, issue, TRANCHE_A);
+        const rc = await confirm(await serial(() => asBi.bond.issueByPartitionStealth(TRANCHE_A, p.s.stealthAddress, issue, p.s.ephemeralPubKey, p.s.viewTag, p.memo, { gasPrice: gp })));
+        own = scan(await txAnnouncements(rc.blockNumber, rc.hash, 'bond'), biKeys!.viewKey, biKeys!.spendKey)[0];
+        if (!own) throw new Error('BI tidak menemukan DFABI yang baru diterbitkan ke alamatnya sendiri');
+        busy.add(lc(own.stealthAddress));
+      }
+      taken.push(lc(own.stealthAddress));
+      return own;
+    };
     try {
       const rcv = banks[req.to as BankId];
       let kind: 'rd' | 'bond';
@@ -158,7 +294,7 @@ export function createStealthAdapter(state: StealthState, rpcUrl = state.rpcUrl 
 
       if (flow.dvp) {
         kind = 'bond';
-        const seller = banks[req.from as BankId];
+        const seller = award ? biKeys! : banks[req.from as BankId];
         const price = amount * PRICE_PER_UNIT;
         // Bond leg goes to the buyer, RD leg to the seller. Settled immediately, no expiry wait.
         const [bondLeg, rdLeg] = await step(0, async () => [
@@ -167,7 +303,7 @@ export function createStealthAdapter(state: StealthState, rpcUrl = state.rpcUrl 
         ]);
         leg = bondLeg;
         tx = await step(1, async () => {
-          const sellerSrc = await take(req.from as BankId, 'DFABI', amount);
+          const sellerSrc = award ? await biSeller() : await take(req.from as BankId, 'DFABI', amount);
           const buyerSrc = await take(req.to as BankId, 'RD', price);
           const sellerW = new Wallet(sellerSrc.privateKey, provider);
           const buyerW = new Wallet(buyerSrc.privateKey, provider);
@@ -233,6 +369,11 @@ export function createStealthAdapter(state: StealthState, rpcUrl = state.rpcUrl 
     const ctx = result.context as Ctx;
     const anns = await txAnnouncements(result.block, result.txHash, ctx.kind);
     if (!anns.length) throw new Error('Pengumuman transaksi tidak ditemukan di block');
+    // dvp: the RD leg is a second announcement of the same tx; its amount is public in the log, so every party reads it the same way.
+    const rdAmount = FLOWS[req.flow].dvp
+      ? (await txAnnouncements(result.block, result.txHash, 'rd')).map((a) => parse('rd', a.metadata)?.amount.toString() ?? null).find((x) => x !== null) ?? null
+      : null;
+    if (FLOWS[req.flow].dvp && rdAmount === null) throw new Error('Pengumuman RD dari DvP ini tidak ditemukan di block'); // amounts are public in the log: a missing leg is a failed read, not "unreadable"
     if (role === 'sender' || role === 'issuer') {
       // Read the tx's announcement back from the chain; amount, stealth address and token shown are the on-chain ones.
       const own = anns.find((a) => lc(a.stealthAddress) === lc(ctx.stealthAddress));
@@ -240,7 +381,7 @@ export function createStealthAdapter(state: StealthState, rpcUrl = state.rpcUrl 
       const chain = parse(ctx.kind, own.metadata)!;
       checkOwnTx(ctx, { stealthAddress: own.stealthAddress, amount: chain.amount, token: chain.token }, tokenOf(ctx.kind === 'rd' ? 'RD' : 'DFABI'));
       return {
-        party, role, verdict: 'clear', amount: chain.amount.toString(), counterparty: { from: party, to: req.to },
+        party, role, verdict: 'clear', amount: chain.amount.toString(), rdAmount, counterparty: { from: party, to: req.to },
         onChain: onChain(result.txHash, own.stealthAddress, chain.memo, chain.amount),
         method: 'Baca pengumuman transaksi dari chain (`announcements`), lalu cocokkan dengan data yang dibangun pengirim (`deriveStealth`, `buildMemo`)',
       };
@@ -248,7 +389,7 @@ export function createStealthAdapter(state: StealthState, rpcUrl = state.rpcUrl 
     const ann = anns[0];
     const md = parse(ctx.kind, ann.metadata)!;
     const view = (verdict: LensView['verdict'], amount: bigint, counterparty: Counterparty | null, method: string): LensView =>
-      ({ party, role, verdict, amount: amount.toString(), counterparty, onChain: onChain(result.txHash, ann.stealthAddress, md.memo, amount), method });
+      ({ party, role, verdict, amount: amount.toString(), rdAmount, counterparty, onChain: onChain(result.txHash, ann.stealthAddress, md.memo, amount), method });
 
     if (role === 'receiver') {
       const k = banks[party as BankId];
@@ -266,6 +407,76 @@ export function createStealthAdapter(state: StealthState, rpcUrl = state.rpcUrl 
     const hits = scanView(anns, { id: party, viewKey: k.viewKey, metaAddress: k.metaAddress }).length;
     const opened = openMemo(md.memo, k.viewKey, { chainId, token: md.token, stealthAddress: ann.stealthAddress, amount: md.amount, ephemeralPubKey: ann.ephemeralPubKey, partition: (md as { partition?: string }).partition });
     return view(outsiderVerdict(hits, opened), md.amount, null, `scanView (${hits} hasil) + openMemo (${opened ? 'terbuka' : 'null'})`);
+  }
+
+  // The party's own read of every RD / DFABI transaction in the window (ARCHITECTURE.md §2.3).
+  //   bank:   a payment it received (found with its view + spend key) or sent (a token Transfer from an address it controls) is clear;
+  //           every other announcement is partial: token and amount are public in the log, the parties are not (outsiderVerdict
+  //           still checks that its own keys read nothing). A sender cannot read the receiver's memo, so `to` of a plain send is null;
+  //           in a dvp the seller reads the RD leg paid to it and so names the buyer.
+  //   BI:     biRows with the banks' view keys -> viewkey; its own issuance (sender BI) is clear.
+  async function history(party: PartyId, limit: number): Promise<HistoryItem[]> {
+    if (!Number.isInteger(limit) || limit < 1) throw new Error('limit harus bilangan bulat >= 1');
+    const want = Math.min(limit, HISTORY_MAX);
+    const anns = await refresh();
+    const head = anns.length ? Math.max(upTo, anns[anns.length - 1]!.blockNumber) : upTo;
+    const lo = Math.max(d.fromBlock, head - STEALTH_HISTORY_BLOCKS + 1);
+    type Group = { block: number; rd?: LoggedAnnouncement; bond?: LoggedAnnouncement };
+    const groups = new Map<string, Group>();
+    for (const a of anns) {
+      if (a.blockNumber < lo) continue;
+      const kind = lc(a.caller) === lc(d.rd) ? 'rd' : lc(a.caller) === lc(d.bond) ? 'bond' : null;
+      if (!kind) continue;
+      const g = groups.get(a.txHash) ?? { block: a.blockNumber };
+      g[kind] ??= a;
+      groups.set(a.txHash, g);
+    }
+    // newest block first; inside a block the later announcement first (the cache keeps log order)
+    const order = new Map([...groups.keys()].map((h, i) => [h, i]));
+    const newest = [...groups].sort((x, y) => y[1].block - x[1].block || order.get(y[0])! - order.get(x[0])!).slice(0, want);
+    const bank = party === 'BI' ? null : (party as BankId);
+    const mine = bank ? await receivedBy(bank, lo) : new Set<string>();
+    const sent = bank ? await sentTxs(bank, lo, head) : new Set<string>();
+
+    return Promise.all(newest.map(async ([txHash, g]): Promise<HistoryItem> => {
+      const kind = g.bond ? 'bond' : 'rd';
+      const main = (g.bond ?? g.rd)!;
+      const dvp = !!(g.rd && g.bond);
+      const md = parse(kind, main.metadata)!;
+      const amount = md.amount.toString();
+      const rdAmount = dvp ? parse('rd', g.rd!.metadata)!.amount.toString() : null;
+      const base = { id: txHash, at: await atOf(g.block), block: g.block, rdAmount, amount, asset: (kind === 'rd' ? 'RD' : 'DFABI') as 'RD' | 'DFABI' };
+
+      if (!bank) { // BI: the banks' view keys
+        const row = biRows(chainId, [main], holders, kind)[0];
+        if (!row) {
+          // BI's own inventory top-up (addressed to BI's stealth address): BI holds the view key of its own addresses, so it reads sender and receiver in full.
+          if (biKeys && !dvp && scan([main], biKeys.viewKey, biKeys.spendKey).length) {
+            const counterparty: Counterparty = { from: partyOf(read(chainId, main, biKeys.viewKey, kind).sender), to: 'BI' };
+            const issue = counterparty.from === 'BI';
+            return { ...base, flow: flowLabel(false, kind, issue), role: roleFromParties('BI', counterparty, issue), verdict: 'clear', counterparty };
+          }
+          return { ...base, flow: null, role: 'regulator', verdict: 'partial', counterparty: null }; // addressed to none of the banks: only token and amount are readable
+        }
+        const counterparty: Counterparty = { from: partyOf(row.sender), to: row.bank as BankId };
+        const issue = counterparty.from === 'BI'; // issue or, with an RD leg, award: BI is a party, so clear
+        return { ...base, flow: flowLabel(dvp, kind, issue), asset: base.asset, role: roleFromParties('BI', counterparty, issue), verdict: issue ? 'clear' : 'viewkey', counterparty };
+      }
+      const k = banks[bank];
+      const gotMain = mine.has(lc(main.stealthAddress));
+      const gotRd = !!g.rd && mine.has(lc(g.rd.stealthAddress));
+      if (gotMain || gotRd || sent.has(txHash)) {
+        const counterparty: Counterparty = gotMain
+          ? { from: partyOf(read(chainId, main, k.viewKey, kind).sender), to: bank }
+          : { from: bank, to: gotRd ? partyOf(read(chainId, g.rd!, k.viewKey, 'rd').sender) : null };
+        const issue = counterparty.from === 'BI';
+        return { ...base, flow: flowLabel(dvp, kind, issue), role: roleFromParties(party, counterparty, issue), verdict: 'clear', counterparty };
+      }
+      // Not its payment: the same checks lens() runs for an outsider.
+      const hits = scanView([main], { id: party, viewKey: k.viewKey, metaAddress: k.metaAddress }).length;
+      const opened = openMemo(md.memo, k.viewKey, { chainId, token: md.token, stealthAddress: main.stealthAddress, amount: md.amount, ephemeralPubKey: main.ephemeralPubKey, partition: (md as { partition?: string }).partition });
+      return { ...base, flow: null, role: 'outsider', verdict: outsiderVerdict(hits, opened), counterparty: null };
+    }));
   }
 
   // Funds `count` fresh stealth addresses of `bank` with exactly LOAD_AMOUNT RD each (BI mints) and records their keys.
@@ -289,7 +500,7 @@ export function createStealthAdapter(state: StealthState, rpcUrl = state.rpcUrl 
   return {
     id: 'stealth',
     stepLabels: LABELS,
-    capabilities: () => Object.fromEntries(FLOW_IDS.map((f): [FlowId, Capability] => [f, { enabled: true }])) as Record<FlowId, Capability>,
+    capabilities: () => ({ ...Object.fromEntries(FLOW_IDS.map((f): [FlowId, Capability] => [f, { enabled: true }])), award: biKeys ? { enabled: true } : { enabled: false, reason: NO_BI_KEY } }) as Record<FlowId, Capability>,
     async health() {
       try {
         return await withDeadline((async () => {
@@ -304,11 +515,20 @@ export function createStealthAdapter(state: StealthState, rpcUrl = state.rpcUrl 
       }
     },
     async balanceOf(party, asset) {
-      if (party === 'BI') return 0n; // BI holds no balance, it issues
+      // BI: the sum over every stealth address its own view key finds (inventory top-ups and award receipts); without a BI key, nothing to read.
+      if (party === 'BI') return biKeys ? (await biHoldings(asset)).reduce((m, h) => m + h.balance, 0n) : 0n;
       return (await holdings(party, asset)).reduce((m, h) => (h.balance > m ? h.balance : m), 0n);
     },
     run,
     lens,
+    history,
+    network: () => besuNetwork({ paladin: false }),
+    // no Paladin: a stealth transfer is a plain ERC-20 call, so the public receipt is all a node holds
+    trace: (tx, party) => besuTrace(tx, party, {
+      paladin: false, rpc: rpcUrl,
+      name: nameFrom({ [d.rd.toLowerCase()]: 'RD', [d.bond.toLowerCase()]: 'DFABI', [d.dvpFactory.toLowerCase()]: 'DvPFactory', [d.announcer.toLowerCase()]: 'Announcer' }),
+    }),
+    receipt: async (tx) => ({ ...(await besuReceipt(tx, undefined, rpcUrl)), node: null }),
     async loadCapacity() {
       return 3 * Math.min(...PAIRS.map(([a, b]) => unused(a, b).length));
     },
@@ -349,5 +569,10 @@ export function createStealthAdapter(state: StealthState, rpcUrl = state.rpcUrl 
 
 export async function load(): Promise<ModelAdapter | null> {
   const s = readState<StealthState>('stealth');
-  return s ? createStealthAdapter(s) : null;
+  if (!s) return null;
+  const adapter = createStealthAdapter(s);
+  // The first read of the announcement cache walks every block since the deploy (about 9 s on the live chain). Start it now, in the
+  // background, so the first history() or lens() finds it warm; a failure here just means the first real call pays and reports it.
+  void adapter.history('BI', 1).catch(() => {});
+  return adapter;
 }

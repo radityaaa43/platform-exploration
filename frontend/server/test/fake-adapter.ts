@@ -1,12 +1,12 @@
-import { CANCELLED, type Capability, type LensView, type ModelAdapter } from '../src/adapter.ts';
-import { roleOf, type FlowId, type ModelId } from '../src/domain.ts';
+import { CANCELLED, type Capability, type HistoryItem, type LensView, type ModelAdapter, type Network, type Receipt, type Trace, type TraceStep } from '../src/adapter.ts';
+import { FLOWS, PRICE_PER_UNIT, isDvpFlow, roleOf, type FlowId, type FlowRequest, type ModelId } from '../src/domain.ts';
 
-const FLOW_IDS: FlowId[] = ['rd-issue', 'rd-transfer', 'dfabi-issue', 'dfabi-transfer', 'dvp'];
+const FLOW_IDS: FlowId[] = ['rd-issue', 'rd-transfer', 'dfabi-issue', 'dfabi-transfer', 'dvp', 'award'];
 
 // Deterministic adapter for tests: no chain access, fixed results.
 export function fakeAdapter(
   id: ModelId,
-  opts: { ready?: boolean; capacity?: number; tps?: number; failEvery?: number; serial?: boolean; onSubmit?: () => void; disabled?: Partial<Record<FlowId, string>> } = {},
+  opts: { ready?: boolean; capacity?: number; tps?: number; failEvery?: number; serial?: boolean; onSubmit?: () => void; disabled?: Partial<Record<FlowId, string>>; transparent?: boolean; biVerdict?: 'reported' | 'notarised' | 'viewkey' } = {}, // transparent: every party reads everything (Iroha 3); biVerdict: what BI's read of a bank-to-bank tx is called (default 'clear')
 ): ModelAdapter {
   let calls = 0;
   let lockTail: Promise<unknown> = Promise.resolve(); // opts.serial: one transfer at a time, like a per-sender lock
@@ -27,15 +27,66 @@ export function fakeAdapter(
     },
     async lens(req, _result, party): Promise<LensView> {
       const role = roleOf(req, party);
-      const sealed = role === 'outsider';
+      const sealed = role === 'outsider' && !opts.transparent;
       return {
-        party, role, verdict: sealed ? 'sealed' : 'clear',
+        party, role, verdict: sealed ? 'sealed' : role === 'regulator' && opts.biVerdict ? opts.biVerdict : 'clear',
         amount: sealed ? null : req.amount,
+        rdAmount: sealed || !isDvpFlow(req.flow) ? null : (BigInt(req.amount) * PRICE_PER_UNIT).toString(),
         counterparty: sealed ? null : { from: req.from, to: req.to },
         onChain: [{ label: 'tx', value: '0x' + 'ab'.repeat(32) }],
         method: `fake:${id}`,
       };
     },
+    // Same shape as lens(): the outsider observes the tx but reads nothing (sealed).
+    async history(party, limit): Promise<HistoryItem[]> {
+      const txs: FlowRequest[] = [
+        { model: id, flow: 'rd-issue', from: 'BI', to: 'A', amount: '5000' },
+        { model: id, flow: 'rd-transfer', from: 'A', to: 'B', amount: '1000' },
+        { model: id, flow: 'dvp', from: 'B', to: 'C', amount: '3' },
+      ];
+      return txs.slice(0, limit).map((req, i) => {
+        const role = roleOf(req, party);
+        const sealed = role === 'outsider' && !opts.transparent;
+        const dvp = isDvpFlow(req.flow);
+        return {
+          id: `0x${String(i + 1).repeat(64)}`, at: new Date(Date.UTC(2026, 10, 2, 10, 0, 0) - i * 60_000).toISOString(), block: 100 - i,
+          flow: sealed ? null : req.flow, asset: sealed ? null : FLOWS[req.flow].asset,
+          role, verdict: sealed ? 'sealed' : role === 'regulator' && opts.biVerdict ? opts.biVerdict : 'clear',
+          amount: sealed ? null : req.amount, rdAmount: sealed || !dvp ? null : (BigInt(req.amount) * PRICE_PER_UNIT).toString(),
+          counterparty: sealed ? null : { from: req.from, to: req.to },
+        };
+      });
+    },
+    network: async (): Promise<Network> => ({
+      nodes: (['BI', 'A', 'B', 'C'] as const).map((owner, i) => ({ id: `node${i + 1}`, label: `Node ${i + 1}`, kind: 'paladin', owner, status: 'up', detail: 'ok' })),
+      links: [{ from: 'node1', to: 'node2' }, { from: 'node1', to: 'node3' }, { from: 'node1', to: 'node4' }],
+    }),
+    // a fixed two-step flow; the first step has the party's own node record (Paladin + Besu spans), the second block time only
+    trace: async (tx, party): Promise<Trace> => {
+      const io = (v: string) => ({ summary: [{ label: 'Fungsi', value: v }], json: { method: 'eth_getTransactionByHash', params: [tx] } });
+      const step = (title: string, block: number, spans: TraceStep['spans'], own: boolean): TraceStep => ({
+        title, tx: block === 42 ? tx : '0x' + 'cd'.repeat(32), block, at: `2026-11-02T10:00:0${block - 40}.000Z`, spans,
+        events: [{ name: 'LockCreated', args: 'lockId=0x1' }], req: io(title), resp: io('Berhasil'),
+        node: own ? { source: `Node Paladin (${party})`, req: io('createLock'), resp: io('ok') } : null,
+      });
+      return {
+        source: 'Fake RPC', note: null,
+        steps: [
+          step('Lock DFABI dibuat', 41, [{ component: 'Paladin', label: 'Susun', start: '2026-11-02T10:00:00.000Z', end: '2026-11-02T10:00:00.180Z' }, { component: 'Besu', label: 'Masuk blok', start: '2026-11-02T10:00:00.180Z', end: '2026-11-02T10:00:01.000Z' }], party !== 'C'),
+          step('Eksekusi atomik: kedua kaki pindah', 42, [{ component: 'Besu', label: 'Blok', start: '2026-11-02T10:00:01.000Z', end: '2026-11-02T10:00:03.000Z' }], false),
+        ],
+      };
+    },
+    // zeto/noto carry a per-node (Paladin) part; C plays the bank outside the tx, whose node holds only the public receipt
+    receipt: async (tx, party): Promise<Receipt> => ({
+      source: 'Fake RPC',
+      chain: [{ title: 'Receipt Besu', rows: [{ label: 'Status', value: 'Berhasil (0x1)' }, { label: 'Tx hash', value: tx }, { label: 'Blok', value: '42' }] }],
+      node: id === 'zeto' || id === 'noto'
+        ? party === 'C' && !opts.transparent
+          ? { source: 'Node Paladin 4 (Bank Sejahtera)', parts: [], note: 'Tidak ada data privat di node Bank Sejahtera: node ini hanya memegang receipt publik' }
+          : { source: `Node Paladin (${party})`, parts: [{ title: `Receipt ${id} · 0000aaaa`, rows: [{ label: 'Status', value: 'Berhasil' }, { label: 'State privat', value: 'confirmed 1' }] }], note: null }
+        : null,
+    }),
     loadCapacity: async () => opts.capacity ?? 1000,
     prepareLoad: async () => {},
     async transferForLoad(_from, _to, _amount, signal) {

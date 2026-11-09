@@ -1,0 +1,71 @@
+# Gateway for Bank A (node2): Envoy + OPA in one pod, next to (not inside) the operator-owned STS.
+# ConfigMaps bank-gw-2-envoy and bank-gw-opa-v2 are created from files (see README). OPA pulls its signed bundles from
+# bundle-server (ConfigMap bank-gw-2-bundles is mounted there, not here); --set below is what differs per gateway.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bank-gw-2
+  namespace: paladin
+  labels: {app: bank-gw, node: node2}
+spec:
+  replicas: 1
+  strategy: {type: RollingUpdate, rollingUpdate: {maxSurge: 1, maxUnavailable: 0}}
+  selector:
+    matchLabels: {app: bank-gw, node: node2}
+  template:
+    metadata:
+      labels: {app: bank-gw, node: node2}
+    spec:
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, seccompProfile: {type: RuntimeDefault}}
+      containers:
+      - name: envoy
+        image: envoyproxy/envoy:v1.38.9
+        args: ["-c", "/config/envoy.yaml", "--log-level", "warn"]
+        ports:
+        - {name: paladin, containerPort: 8548}
+        - {name: besu, containerPort: 8545}
+        readinessProbe: {tcpSocket: {port: 8548}, periodSeconds: 5}
+        resources:
+          requests: {cpu: 20m, memory: 32Mi}
+          limits: {memory: 128Mi}
+        securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+        volumeMounts:
+        - {name: envoy, mountPath: /config, readOnly: true}
+        - {name: mtls, mountPath: /mtls, readOnly: true} # empty until Secret bank-gw-2-mtls exists (README, mTLS)
+      - name: opa
+        image: openpolicyagent/opa:1.21.1-envoy-1-static
+        args:
+        - run
+        - --server
+        - --addr=localhost:8181
+        - --diagnostic-addr=0.0.0.0:8282
+        - --authorization=basic
+        - --config-file=/config/opa.yaml
+        - --set=labels.gateway=bank-gw-2
+        - --set=bundles.bi.resource=2/bi.tar.gz
+        - --set=bundles.bank.resource=2/bank.tar.gz
+        - --set=bundles.bank.signing.keyid=bank-a
+        readinessProbe: {httpGet: {path: "/health?plugins&bundles", port: 8282}, periodSeconds: 5}
+        livenessProbe: {httpGet: {path: /health, port: 8282}, periodSeconds: 10}
+        resources:
+          requests: {cpu: 20m, memory: 64Mi}
+          limits: {memory: 256Mi}
+        securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+        volumeMounts:
+        - {name: opa, mountPath: /config, readOnly: true}
+      volumes:
+      - {name: envoy, configMap: {name: bank-gw-2-envoy}}
+      - {name: mtls, secret: {secretName: bank-gw-2-mtls, optional: true, defaultMode: 292}} # 0444: envoy runs as uid 10001
+      - {name: opa, configMap: {name: bank-gw-opa-v2}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bank-gw-2
+  namespace: paladin
+  labels: {app: bank-gw, node: node2}
+spec:
+  selector: {app: bank-gw, node: node2}
+  ports:
+  - {name: paladin, port: 8548, targetPort: 8548}
+  - {name: besu, port: 8545, targetPort: 8545}

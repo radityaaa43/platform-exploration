@@ -1,4 +1,4 @@
-# Lensa Privasi
+# Eksplorasi Rupiah Digital
 
 Demo satu transaksi yang sama dilihat dari tiap pihak (BI, bank pengirim, bank penerima, bank lain) di lima model: Zeto, Noto, Stealth, Fabric-X, Iroha 3. Ada juga stress test TPS yang membandingkan semuanya.
 
@@ -6,19 +6,19 @@ Server di port 8790 (`PORT` mengganti). Port 8791 dipakai server mock untuk Play
 
 ## Prasyarat
 
+- Kubeconfig cluster hanya satu: `alibaba.yaml` di root repo (di-gitignore, jangan di-commit). Semua perintah `kubectl` di bawah memakai `export KUBECONFIG=<repo>/alibaba.yaml`.
 - Port-forward Paladin aktif: node1..4 di `127.0.0.1:31548`, `:31648`, `:31748`, `:31848`. Skripnya `besu/noto+pente/scripts/port-forward-start.sh` (atau `alibaba-kube/Paladin/scripts/port-forward-start.sh` di host demo).
 - Tunnel Besu RPC ke `127.0.0.1:8545`:
 
   ```bash
-  KUBECONFIG=/home/ecs-user/alibaba-kube/alibaba.yaml kubectl port-forward svc/besu-node-validator-1 8545:8545 -n besu
+  kubectl port-forward svc/besu-node-validator-1 8545:8545 -n besu
   ```
 
 - Stealth butuh `besu/stealth-address/.env.smoke`.
-- Fabric-X butuh `kubectl` dan kubeconfig ke cluster (namespace `fabricx`, deployment `rdbi-driver`). Tanpa port-forward: adapter memanggil `kubectl exec`. Kubeconfig dari env `FABRICX_KUBECONFIG`, default `/home/ecs-user/.kube/alibaba.yaml`.
+- Fabric-X butuh `kubectl` dan kubeconfig ke cluster (namespace `fabricx`, deployment `rdbi-driver`). Tanpa port-forward: adapter memanggil `kubectl exec`. Adapter tidak membaca `KUBECONFIG`: isi env `FABRICX_KUBECONFIG` dengan path `alibaba.yaml` yang sama.
 - Iroha 3 butuh port-forward Torii keempat validator (namespace `iroha3`) dan `python3` (hitung intent hash DvP):
 
   ```bash
-  export KUBECONFIG=../iroha3/alibaba.yaml
   i=0; for p in bi bank-a bank-b bank-c; do nohup kubectl -n iroha3 port-forward svc/$p $((38080+i)):8080 --address 127.0.0.1 >/dev/null 2>&1 & i=$((i+1)); done
   ```
 
@@ -71,6 +71,34 @@ npm run build && npm start
 
 Buka `http://localhost:8790`. Dari laptop: `ssh -L 8790:localhost:8790 <host>`, lalu buka `http://localhost:8790`.
 
+### Sebagai layanan systemd (user)
+
+Server dan port-forward dijalankan systemd user, jadi tetap hidup tanpa sesi login (linger aktif) dan naik lagi sendiri
+kalau mati. Semuanya hanya di `127.0.0.1`.
+
+- `lensa.service`: server di port `PORT` (default 8790). Dianggap jalan setelah `/api/health` menjawab 200.
+- `lensa-pf@<nama>.service`: satu port-forward per baris `deploy/forwards.conf` (Paladin, Besu, Iroha 3). Fabric-X tidak
+  butuh forward (memakai `kubectl exec`). Kalau port lokal sedang dipakai proses lain, unit menunggu dan baru mengambil
+  alih setelah port itu bebas.
+- Konfigurasi di `~/.config/lensa/lensa.env` (mode 600, tidak masuk git; contoh: `deploy/lensa.env.example`).
+
+```bash
+deploy/install.sh                       # sekali: pasang unit, buat lensa.env bila belum ada, enable; tidak menjalankan apa pun
+systemctl --user start lensa            # jalankan (forward ikut naik)
+systemctl --user stop lensa             # hentikan server; forward tetap jalan
+systemctl --user stop 'lensa-pf@*'      # hentikan semua forward
+deploy/update.sh                        # build web lalu restart server
+journalctl --user -u lensa -f           # log server; forward: -u 'lensa-pf@*'
+systemctl --user status lensa 'lensa-pf@*'
+systemctl --user reset-failed lensa     # setelah 5 kali gagal start dalam 10 menit systemd berhenti mencoba; ini membuka lagi
+```
+
+`deploy/update.sh` membangun ke `web/dist.new` dulu dan baru menukarnya dengan `web/dist` kalau build berhasil; build yang
+gagal tidak menyentuh `dist` maupun server yang sedang jalan.
+
+Rollback ke cara manual: `systemctl --user disable --now lensa 'lensa-pf@*'`, lalu jalankan seperti di atas
+(`npm start`) dengan port-forward sendiri.
+
 ## Tes
 
 ```bash
@@ -82,6 +110,8 @@ npm run test:live -w server -- test/live/stealth.live.ts
 npm run test:live -w server -- test/live/fabricx.live.ts   # butuh kubectl, tanpa lock Paladin
 npm run test:live -w server -- test/live/iroha3.live.ts    # butuh port-forward Iroha 3
 ```
+
+Peragaan otomatis di browser (tur, transaksi nyata, Lensa, dengan keterangan di layar) dan modenya tanpa chain: lihat `demo/README.md`.
 
 Tes live Paladin (zeto, noto) jalan di bawah lock supaya tidak bertabrakan:
 

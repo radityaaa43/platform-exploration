@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { ServerResponse } from 'node:http';
 import Fastify, { type FastifyError, type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import fastifyStatic from '@fastify/static';
-import type { Capability, LensView, ModelAdapter } from './adapter.ts';
+import { HISTORY_MAX, NotAvailableError, WarmingUpError, type Capability, type LensView, type ModelAdapter } from './adapter.ts';
 import { withDeadline } from './deadline.ts';
 import {
   FLOWS, MODEL_NAMES, PARTIES, PRICE_PER_UNIT, validateRequest,
@@ -11,12 +11,19 @@ import {
 import { probeNodes, type Probe } from './health.ts';
 import { HEALTH_MS, StressRun, validateStress, type StressConfig } from './stress.ts';
 import { toCsv } from './stats.ts';
+import { REGISTRY, isPlatform } from './policy/platforms.ts';
+import { registerPolicyRoutes, registerPolicyUnavailable, type PolicyDeps } from './policy/routes.ts';
 
 type Adapters = Partial<Record<ModelId, ModelAdapter>>;
 
 const MODELS = Object.keys(MODEL_NAMES) as ModelId[];
 const PARTY_IDS = Object.keys(PARTIES) as PartyId[];
 const TX_DEADLINE_MS = 120_000;
+const HISTORY_MS = 20_000;
+const NETWORK_MS = 5_000;
+const RECEIPT_MS = 20_000;
+const TRACE_MS = 30_000; // a DvP is ~8 txs, each read with its receipt, block and (own node) Paladin record
+const HISTORY_LIMIT = 20;
 const HEALTH_POLL_MS = 3_000; // /api/health is polled by the UI; stress and tx keep the longer HEALTH_MS
 const KEEP_RUN_MS = 5 * 60_000;
 const BUSY_REASON = 'Transaksi lain sedang diproses';
@@ -43,13 +50,48 @@ const stressBody = {
     limitS: { enum: [120, 300, 600] },
   },
 } as const;
+// coerceTypes is off, so limit stays a string and the handler checks its range
+const modelQuery = { type: 'object', required: ['model'], properties: { model: { enum: MODELS } } } as const;
+const partyQuery = {
+  type: 'object', required: ['model', 'party'],
+  properties: { model: { enum: MODELS }, party: { enum: PARTY_IDS }, limit: { type: 'string', pattern: '^[0-9]{1,3}$' } },
+} as const;
+// tx: a Besu hash (0x + 64 hex) or a Fabric-X / Iroha 3 id (64 hex). Strict, because adapters pass it on to a CLI or SQL.
+const receiptQuery = {
+  type: 'object', required: ['model', 'party', 'tx'],
+  properties: { model: { enum: MODELS }, party: { enum: PARTY_IDS }, tx: { type: 'string', pattern: '^(0x)?[0-9a-fA-F]{64}$' } },
+} as const;
 
-const json = (v: unknown) => JSON.stringify(v, (_k, x) => (typeof x === 'bigint' ? x.toString() : x));
+const json =(v: unknown) => JSON.stringify(v, (_k, x) => (typeof x === 'bigint' ? x.toString() : x));
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+// An OPA gateway deny reaches the Paladin SDK as an axios error with status 403 (raw text: "Request failed with status code 403").
+const isGatewayDeny = (e: unknown) => (e as { isAxiosError?: boolean; response?: { status?: number } } | null)?.isAxiosError === true
+  && (e as { response?: { status?: number } }).response?.status === 403;
+
+// No server internals in what a client receives (ARCHITECTURE.md §2.2): cut a CLI command line, drop `--kubeconfig …`,
+// replace absolute paths. URLs survive: their '/' never follows whitespace, a quote, '(', '=', ':' or ','.
+const CMD = 'Command failed:';
+const ABS_PATH = /(?<=^|[\s'"(=:,])\/(?:[\w.@+-]+\/)*[\w.@+-]+/g;
+export function safeReason(m: string): string {
+  let s = m;
+  const at = s.indexOf(CMD);
+  if (at >= 0) {
+    const before = s.slice(0, at).trim();
+    s = before === '' ? 'Perintah ke node gagal' : before.endsWith(':') ? `${before} Perintah ke node gagal` : before;
+  }
+  return s.replace(/--kubeconfig(?:=|\s+)\S+\s*/g, '').replace(ABS_PATH, '(berkas server)').replace(/\s{2,}/g, ' ').trim();
+}
+// every error-ish text field of a JSON body or SSE event, at any depth
+const SCRUBBED = new Set(['reason', 'error', 'detail', 'firstError']);
+function scrub(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(scrub);
+  if (v === null || typeof v !== 'object') return v;
+  return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, typeof x === 'string' && SCRUBBED.has(k) ? safeReason(x) : scrub(x)]));
+}
 
 interface Sse { send(event: string, data: unknown): void; end(): void }
 
-export function buildApp(adapters: Adapters, opts: { webDist?: string; probe?: Probe } = {}): FastifyInstance {
+export function buildApp(adapters: Adapters, opts: { webDist?: string; probe?: Probe; loadFailures?: Partial<Record<ModelId, string>>; policy?: PolicyDeps } = {}): FastifyInstance {
   const app = Fastify({
     logger: { level: process.env.VITEST ? 'silent' : 'error' }, // real errors reach the console; tests stay quiet
     forceCloseConnections: true, // shutdown must not wait on keep-alive / SSE sockets
@@ -63,8 +105,15 @@ export function buildApp(adapters: Adapters, opts: { webDist?: string; probe?: P
   let lastStress: StressRun | null = null;
   const streams = new Set<ServerResponse>();
   app.addHook('onClose', async () => { for (const r of streams) r.end(); });
+  // one place for every JSON reply (4xx, 5xx, and 200 bodies that carry an error/detail text)
+  app.addHook('preSerialization', async (_req, _reply, payload) => scrub(payload));
 
-  app.setNotFoundHandler((_req, reply) => reply.code(404).send({ reason: 'Tidak ditemukan' }));
+  // SPA fallback for History-API deep links: only GET, never /api/, never a path with an extension (a missing asset stays 404)
+  app.setNotFoundHandler((req, reply) => {
+    const path = req.url.split('?')[0];
+    if (opts.webDist && req.method === 'GET' && !path.startsWith('/api/') && !/\.[^/]*$/.test(path)) return reply.sendFile('index.html');
+    return reply.code(404).send({ reason: 'Tidak ditemukan' });
+  });
 
   app.setErrorHandler((err: FastifyError, req, reply) => {
     if (err.validation) {
@@ -92,7 +141,7 @@ export function buildApp(adapters: Adapters, opts: { webDist?: string; probe?: P
     raw.on('close', cleanup);
     raw.on('error', () => { /* write to a gone client; close handler cleans up */ });
     return {
-      send: (event, data) => write(`event: ${event}\ndata: ${json(data)}\n\n`),
+      send: (event, data) => write(`event: ${event}\ndata: ${json(scrub(data))}\n\n`), // SSE bypasses preSerialization
       end: () => { clearInterval(beat); try { raw.end(); } catch { /* already closed */ } },
     };
   }
@@ -107,7 +156,9 @@ export function buildApp(adapters: Adapters, opts: { webDist?: string; probe?: P
       parties: PARTIES, flows: FLOWS,
       models: Object.fromEntries(MODELS.map((m) => {
         const a = adapters[m];
-        return [m, { name: MODEL_NAMES[m], available: !!a, stepLabels: a?.stepLabels ?? [], capabilities: a ? a.capabilities() : unavailable }];
+        // Kebijakan: a model with a policy document (the registry in policy/platforms.ts) and whether a gateway enforces it
+        const policy = isPlatform(m) ? { registered: true, enforced: REGISTRY[m].enforced } : { registered: false, enforced: false, reason: `Kebijakan belum tersedia untuk ${MODEL_NAMES[m]}` };
+        return [m, { name: MODEL_NAMES[m], available: !!a, stepLabels: a?.stepLabels ?? [], capabilities: a ? a.capabilities() : unavailable, policy }];
       })),
     };
   });
@@ -117,11 +168,90 @@ export function buildApp(adapters: Adapters, opts: { webDist?: string; probe?: P
       probe().catch(() => ({ besu: false, paladin: [false, false, false, false] })),
       ...MODELS.map((m) => {
         const a = adapters[m];
-        if (!a) return { ready: false, detail: NA };
+        if (!a) return { ready: false, detail: opts.loadFailures?.[m] ?? NA }; // a model whose load() threw says so
         return withDeadline(a.health(), HEALTH_POLL_MS, 'Cek kesiapan').catch((e) => ({ ready: false, detail: msg(e) }));
       }),
     ]);
     return { models: Object.fromEntries(MODELS.map((m, i) => [m, health[i]])), nodes };
+  });
+
+  // ---- party-scoped reads: never take the busy lock (ARCHITECTURE.md §0.5) ----
+  type PartyQuery = { model: ModelId; party: PartyId; limit?: string };
+
+  app.get<{ Querystring: PartyQuery }>('/api/history', { schema: { querystring: partyQuery } }, async (request, reply) => {
+    const { model, party, limit: raw } = request.query;
+    const limit = raw === undefined ? HISTORY_LIMIT : Number(raw);
+    if (limit < 1 || limit > HISTORY_MAX) return reply.code(400).send({ reason: 'Permintaan tidak valid: limit' });
+    const a = adapters[model];
+    if (!a) return reply.code(503).send(modelUnavailable(model));
+    try {
+      const items = await withDeadline(a.history(party, limit), HISTORY_MS, 'Riwayat');
+      if (items.truncated) reply.header('x-history-truncated', '1');
+      // v1.3: fresh txs this party's node holds back (not indexed yet); Lensa must not call them absent
+      if (items.pending?.length) reply.header('x-history-pending', items.pending.join(','));
+      return [...items];
+    } catch (e) {
+      if (e instanceof NotAvailableError) return reply.code(501).send({ reason: e.message });
+      if (e instanceof WarmingUpError) return reply.code(503).header('retry-after', String(e.retryAfterS)).send({ reason: e.message }); // v1.4: loading, not an error
+      request.log.error({ err: e }, `history ${model} ${party}`); // the original stays in the server log; the client gets the scrubbed reason
+      return reply.code(502).send({ reason: `Riwayat ${MODEL_NAMES[model]} untuk ${PARTIES[party].name} tidak dapat dibaca: ${msg(e)}` });
+    }
+  });
+
+  app.get<{ Querystring: { model: ModelId } }>('/api/network', { schema: { querystring: modelQuery } }, async (request, reply) => {
+    const { model } = request.query;
+    const a = adapters[model];
+    if (!a) return reply.code(503).send(modelUnavailable(model));
+    try {
+      return await withDeadline(a.network(), NETWORK_MS, 'Status jaringan');
+    } catch (e) {
+      if (e instanceof NotAvailableError) return reply.code(501).send({ reason: e.message });
+      if (e instanceof WarmingUpError) return reply.code(503).header('retry-after', String(e.retryAfterS)).send({ reason: e.message }); // v1.4: loading, not an error
+      request.log.error({ err: e }, `network ${model}`); // the original stays in the server log; the client gets the scrubbed reason
+      return reply.code(502).send({ reason: `Status jaringan ${MODEL_NAMES[model]} tidak dapat dibaca: ${msg(e)}` });
+    }
+  });
+
+  // v1.5: a tx's receipt as the network stores it; the node part comes from the party's own node (ARCHITECTURE.md §2.2)
+  app.get<{ Querystring: { model: ModelId; party: PartyId; tx: string } }>('/api/receipt', { schema: { querystring: receiptQuery } }, async (request, reply) => {
+    const { model, party, tx } = request.query;
+    const a = adapters[model];
+    if (!a) return reply.code(503).send(modelUnavailable(model));
+    try {
+      return await withDeadline(a.receipt(tx, party), RECEIPT_MS, 'Receipt');
+    } catch (e) {
+      if (e instanceof NotAvailableError) return reply.code(501).send({ reason: e.message });
+      request.log.error({ err: e }, `receipt ${model} ${party}`); // the original stays in the server log; the client gets the scrubbed reason
+      return reply.code(502).send({ reason: `Receipt ${MODEL_NAMES[model]} di node ${PARTIES[party].name} tidak dapat dibaca: ${msg(e)}` });
+    }
+  });
+
+  // v1.6: the flow the tx ends, every on-chain step with its chain times, events, request and response (ARCHITECTURE.md §2.2)
+  app.get<{ Querystring: { model: ModelId; party: PartyId; tx: string } }>('/api/trace', { schema: { querystring: receiptQuery } }, async (request, reply) => {
+    const { model, party, tx } = request.query;
+    const a = adapters[model];
+    if (!a) return reply.code(503).send(modelUnavailable(model));
+    try {
+      return await withDeadline(a.trace(tx, party), TRACE_MS, 'Alur transaksi');
+    } catch (e) {
+      if (e instanceof NotAvailableError) return reply.code(501).send({ reason: e.message });
+      request.log.error({ err: e }, `trace ${model} ${party}`);
+      return reply.code(502).send({ reason: `Alur transaksi ${MODEL_NAMES[model]} di node ${PARTIES[party].name} tidak dapat dibaca: ${msg(e)}` });
+    }
+  });
+
+  // one asset failing (a node that cannot answer for that token) never hides the other
+  app.get<{ Querystring: PartyQuery }>('/api/balance', { schema: { querystring: partyQuery } }, async (request, reply) => {
+    const { model, party } = request.query;
+    const a = adapters[model];
+    if (!a) return reply.code(503).send(modelUnavailable(model));
+    const assets = ['RD', 'DFABI'] as const;
+    const got = await Promise.allSettled(assets.map((asset) => withDeadline(a.balanceOf(party, asset), HEALTH_MS, 'Cek saldo')));
+    return Object.fromEntries(assets.map((asset, i) => {
+      const r = got[i];
+      if (r.status === 'rejected') request.log.error({ err: r.reason }, `balance ${model} ${party} ${asset}`);
+      return [asset, r.status === 'fulfilled' ? { amount: r.value.toString() } : { error: msg(r.reason) }];
+    }));
   });
 
   // ---- single transactions ----
@@ -143,7 +273,8 @@ export function buildApp(adapters: Adapters, opts: { webDist?: string; probe?: P
       })(), TX_DEADLINE_MS, 'Transaksi');
       emit('result', out);
     } catch (e) {
-      emit('error', { reason: msg(e) });
+      if (isGatewayDeny(e)) app.log.error({ err: e }, `tx ${req.model} ${req.flow} denied by gateway`); // the original stays in the log
+      emit('error', { reason: isGatewayDeny(e) ? `Ditolak kebijakan di gateway ${PARTIES[req.from].name}` : msg(e) }); // Paladin calls go through the initiator's gateway
     } finally {
       closed = true;
       run.done = true;
@@ -172,11 +303,11 @@ export function buildApp(adapters: Adapters, opts: { webDist?: string; probe?: P
         return reply.code(503).send({ reason: `${MODEL_NAMES[body.model]} belum siap: ${msg(e)}` });
       }
 
-      // [who pays, asset, needed]; issuing needs no balance, dvp checks both legs
+      // [who pays, asset, needed]; dvp checks both legs, an award only the buyer's RD (BI's DFABI is the adapter's job), issuing none
       const flow = FLOWS[body.flow];
-      const needs: [PartyId, 'RD' | 'DFABI', bigint][] = flow.issuer ? []
-        : flow.dvp ? [[body.from, 'DFABI', v.amount], [body.to, 'RD', v.amount * PRICE_PER_UNIT]]
-          : [[body.from, flow.asset, v.amount]];
+      const buyerRd: [PartyId, 'RD', bigint] = [body.to, 'RD', v.amount * PRICE_PER_UNIT];
+      const needs: [PartyId, 'RD' | 'DFABI', bigint][] = flow.dvp ? (flow.issuer ? [buyerRd] : [[body.from, 'DFABI', v.amount], buyerRd])
+        : flow.issuer ? [] : [[body.from, flow.asset, v.amount]];
       try {
         for (const [party, asset, need] of needs) {
           if (await withDeadline(adapter.balanceOf(party, asset), HEALTH_MS, 'Cek saldo') < need) {
@@ -281,6 +412,8 @@ export function buildApp(adapters: Adapters, opts: { webDist?: string; probe?: P
     return reply.header('content-type', 'text/csv; charset=utf-8')
       .header('content-disposition', 'attachment; filename="lensa-stress.csv"').send(toCsv(rows));
   });
+
+  if (opts.policy) registerPolicyRoutes(app, opts.policy); else registerPolicyUnavailable(app);
 
   if (opts.webDist) app.register(fastifyStatic, { root: opts.webDist });
 
