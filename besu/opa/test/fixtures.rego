@@ -1,7 +1,33 @@
 # Test documents for gw/allow: what the Lensa server would build from bundles/bi/bi/config/data.json plus
-# seeds/bi.json (the structural keys are copied from data.json, the limits, hours, holidays and frozen from the
+# seeds/bi.json (the structural keys are copied from data.json, the policy documents, one per platform, from the
 # seed). Kept in the test dir so tests do not depend on live values.
 package fixtures
+
+# One BI document per platform, with today's values (all registered platforms start from the same values).
+bi_doc := {
+	"max_per_tx": {
+		"RD": 1000000000,
+		"DFABI": 1000,
+	},
+	"max_mint_per_tx": {
+		"RD": 1000000000000000,
+		"DFABI": 1000000000000000,
+	},
+	"hours": {
+		"RD": {
+			"days": [1, 2, 3, 4, 5, 6, 7],
+			"open": "00:00",
+			"close": "24:00",
+		},
+		"DFABI": {
+			"days": [1, 2, 3, 4, 5, 6, 7],
+			"open": "00:00",
+			"close": "24:00",
+		},
+	},
+	"holidays": [],
+	"frozen": [],
+}
 
 bi := {
 	"nodes": {
@@ -49,15 +75,15 @@ bi := {
 			"0xdef2e64a415fd95e5b2c9fa1d7bdbc1792c410a1": "RD",
 			"0x2ecc2fe5ff44b850b99607599abc3f6a23e223dc": "DFABI",
 		},
-		"max_per_tx": {
-			"RD": 1000000000,
-			"DFABI": 1000,
-		},
-		"max_mint_per_tx": {
-			"RD": 1000000000000000,
-			"DFABI": 1000000000000000,
-		},
 	},
+	"noto": {"contracts": {
+		"0xf4571ab32cbd61a7cfbf1d1647a39ec8744a7681": "RD",
+		"0xf0735bed31247f52d54e6bc5ed6603c98aec8a63": "DFABI",
+	}},
+	"pente": {"groups": [
+		"0x692f11b9945ff03bd52a0552854dbc51b51c3eefe47fc51a78132af671a96682",
+		"0x90c28c12c7333c548e02550f7c5a709267880ce87badd26e137ece965c739c68",
+	]},
 	"atom": {
 		"factories": [
 			"0xeca568aaf1edd02004aa85562087f8057deb465f",
@@ -149,42 +175,29 @@ bi := {
 			"web3_clientVersion",
 		],
 	},
-	"hours": {
-		"RD": {
-			"days": [
-				1,
-				2,
-				3,
-				4,
-				5,
-				6,
-				7,
-			],
-			"open": "00:00",
-			"close": "24:00",
-		},
-		"DFABI": {
-			"days": [
-				1,
-				2,
-				3,
-				4,
-				5,
-				6,
-				7,
-			],
-			"open": "00:00",
-			"close": "24:00",
-		},
+	"platforms": ["zeto", "noto", "fabricx", "iroha3"],
+	"policy": {
+		"zeto": bi_doc,
+		"noto": bi_doc,
+		"fabricx": bi_doc,
+		"iroha3": bi_doc,
 	},
-	"holidays": [],
-	"frozen": [],
 }
 
-bank_a := {
-	"counterparties": [
-		"bi@node1",
-		"bankB@node3",
-		"bankC@node4",
-	],
-}
+bank_doc := {"counterparties": [
+	"bi@node1",
+	"bankB@node3",
+	"bankC@node4",
+]}
+
+bank_a := {"policy": {
+	"zeto": bank_doc,
+	"noto": bank_doc,
+	"fabricx": bank_doc,
+	"iroha3": bank_doc,
+}}
+
+# The fixture with one platform's document merged with a patch (arrays and scalars are replaced, objects merged).
+bi_with(platform, patch) := object.union(bi, {"policy": {platform: patch}})
+
+bank_with(platform, patch) := object.union(bank_a, {"policy": {platform: patch}})

@@ -37,9 +37,6 @@ function fake(opts: { status?: string; authority?: string; stored?: string; bala
         entrypoint: { External: { payload: { authority: opts.authority ?? 'acct-A', instructions: { Instructions: [opts.stored ?? rendered] } } } } });
     }
     if (args.includes('asset') && args.includes('get')) return JSON.stringify({ value: (args.includes('DFABI-ID') && opts.dfabi) || opts.balance || '10000000000' });
-    if (args.includes('query')) {
-      return JSON.stringify({ content: { details: { value: { delivery: { source: 'DFABI-ID#acct-A', destination: 'DFABI-ID#acct-B', quantity: '2' }, payment: { source: 'RD-ID#acct-B', destination: 'RD-ID#acct-A', quantity: '1999999' } } } } });
-    }
     // a submitted transfer/mint is stored as its instruction; a grant is not the flow's instruction
     if (!args.includes('settlement') && !args.includes('permission')) rendered = args.slice(3).filter((x) => x !== '--no-wait').join(' ');
     return JSON.stringify({ hash: H });
@@ -55,12 +52,12 @@ describe('iroha3 intent hash', () => {
   });
 });
 
-describe('iroha3 BI balance', () => {
-  it('reads BI\'s own account on BI\'s own node', async () => {
+describe('iroha3 balance', () => {
+  it('reads the account\'s ds-rd balance as the operator of the party\'s own node (bank C has no restricted-read grant)', async () => {
     const f = fake({ balance: '42' });
-    expect(await createIroha3Adapter(state, f.cli).balanceOf('BI', 'RD')).toBe(42n);
-    expect(f.calls.at(-1)).toMatchObject({ config: 'bi' });
-    expect(f.calls.at(-1)!.args).toEqual(expect.arrayContaining(['--definition', 'RD-ID', '--account', 'acct-BI']));
+    expect(await createIroha3Adapter(state, f.cli).balanceOf('C', 'RD')).toBe(42n);
+    expect(f.calls.at(-1)).toMatchObject({ config: 'op-bank-c' });
+    expect(f.calls.at(-1)!.args).toEqual(expect.arrayContaining(['--definition', 'RD-ID', '--account', 'acct-C', '--scope', 'dataspace:1']));
   });
 });
 
@@ -83,7 +80,7 @@ describe('iroha3 run', () => {
     expect(grant!.config).toBe('bank-b');
     expect(grant!.args.slice(3)).toEqual(['ledger', 'account', 'permission', 'grant', '--id', 'acct-A']);
     const sid = (r.context as { sid: string }).sid;
-    expect(grant!.stdin).toBe(JSON.stringify({ name: 'CanExecuteSettlement', payload: { debited_asset: 'RD-ID#acct-B', intent_hash: DVP_INTENT, settlement_id: sid } }));
+    expect(grant!.stdin).toBe(JSON.stringify({ name: 'CanExecuteSettlement', payload: { debited_asset: 'RD-ID#acct-B#dataspace:1', intent_hash: DVP_INTENT, settlement_id: sid } }));
     expect(settle!.config).toBe('bank-a');
     expect(settle!.args.slice(3)).toEqual(['app', 'settlement', 'dvp', '--settlement-id', sid,
       '--delivery-asset', 'DFABI-ID', '--delivery-quantity', '2', '--delivery-from', 'acct-A', '--delivery-to', 'acct-B',
@@ -100,7 +97,7 @@ describe('iroha3 run', () => {
     expect(grant!.config).toBe('bank-a');
     expect(grant!.args.slice(3)).toEqual(['ledger', 'account', 'permission', 'grant', '--id', 'acct-BI']);
     const sid = (r.context as { sid: string }).sid;
-    expect(JSON.parse(grant!.stdin!)).toEqual({ name: 'CanExecuteSettlement', payload: { debited_asset: 'RD-ID#acct-A', intent_hash: DVP_INTENT, settlement_id: sid } });
+    expect(JSON.parse(grant!.stdin!)).toEqual({ name: 'CanExecuteSettlement', payload: { debited_asset: 'RD-ID#acct-A#dataspace:1', intent_hash: DVP_INTENT, settlement_id: sid } });
     expect(settle!.config).toBe('bi');
     expect(settle!.args.slice(3)).toEqual(['app', 'settlement', 'dvp', '--settlement-id', sid,
       '--delivery-asset', 'DFABI-ID', '--delivery-quantity', '2', '--delivery-from', 'acct-BI', '--delivery-to', 'acct-A',
@@ -161,11 +158,13 @@ describe('iroha3 lens', () => {
     expect((await a.lens(r, res, 'C')).method).toContain('HTTP 403');
   });
 
-  it('dvp reads amount and parties from the settlement receipt', async () => {
-    const a = createIroha3Adapter(state, fake().cli);
+  it('dvp takes both legs from the verified instruction and sends no ledger query (restricted dataspaces)', async () => {
+    const f = fake();
+    const a = createIroha3Adapter(state, f.cli);
     const r = req('dvp', 'A', 'B', '2');
     const l = await a.lens(r, await a.run(r, 2n, () => {}), 'BI');
-    expect(l).toMatchObject({ verdict: 'clear', amount: '2', rdAmount: '1999999', counterparty: { from: 'A', to: 'B' } }); // the receipt's payment leg
+    expect(l).toMatchObject({ verdict: 'clear', amount: '2', rdAmount: '2000000', counterparty: { from: 'A', to: 'B' } });
+    expect(f.calls.some((c) => c.args.includes('query'))).toBe(false);
   });
 
   it('a transfer lens has no RD leg', async () => {

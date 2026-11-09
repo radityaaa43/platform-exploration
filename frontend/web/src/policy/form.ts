@@ -6,10 +6,10 @@ const TOKENS: Token[] = ['RD', 'DFABI'];
 const MAX = 10 ** 15;
 const nf = new Intl.NumberFormat(ID, { maximumFractionDigits: 0 });
 
-// Whole positive number as typed: plain digits, or "." thousand groups of 3. Returns the number or an Indonesian error.
+// Whole positive number as typed: plain digits without leading zeros, or "." thousand groups of 3. Returns the number or an Indonesian error.
 export function parseAmount(s: string): number | string {
   const t = s.trim();
-  if (!/^(\d+|\d{1,3}(\.\d{3})+)$/.test(t)) return 'Isi dengan angka bulat positif';
+  if (!/^(0|[1-9]\d*|[1-9]\d{0,2}(\.\d{3})+)$/.test(t)) return 'Isi dengan angka bulat positif';
   const n = Number(t.replaceAll('.', ''));
   if (n === 0) return 'Isi dengan angka bulat positif';
   return n > MAX ? 'Maksimal 1.000.000.000.000.000' : n;
@@ -21,6 +21,7 @@ const DAY = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
 const DAY_MS = 86_400_000;
 const WIB_MS = 7 * 3_600_000;
 const IKUT_BI = 'Ikut BI';
+const TANPA_BATAS = 'Tanpa batas';
 
 function dayList(days: number[]): string {
   const d = [...new Set(days)].sort((a, b) => a - b);
@@ -41,6 +42,7 @@ const names = (ids: string[] | undefined): string => (ids?.length ? ids.map(bank
 type Change = { label: string; from: string; to: string };
 type Fields = {
   max_per_tx?: Partial<Record<Token, number>>; max_mint_per_tx?: Partial<Record<Token, number>>; daily_limit?: Partial<Record<Token, number>>;
+  max_balance?: Partial<Record<Token, number>>; min_balance?: Partial<Record<Token, number>>; max_supply?: Partial<Record<Token, number>>;
   hours?: Partial<Record<Token, Hours>>; holidays?: BiPolicy['holidays']; frozen?: string[]; counterparties?: string[];
 };
 
@@ -49,15 +51,18 @@ export function diffDocs(a: PolicyDoc, b: PolicyDoc): Change[] {
   const x: Fields = a as Fields & BankPolicy, y: Fields = b as Fields & BankPolicy;
   const out: Change[] = [];
   const add = (label: string, from: string, to: string) => { if (from !== to) out.push({ label, from, to }); };
-  const perToken = (label: string, key: 'max_per_tx' | 'max_mint_per_tx' | 'daily_limit') => {
+  const perToken = (label: string, key: 'max_per_tx' | 'max_mint_per_tx' | 'daily_limit' | 'max_balance' | 'min_balance' | 'max_supply', absent = IKUT_BI) => {
     for (const t of TOKENS) {
-      const show = (f: Fields) => (f[key]?.[t] === undefined ? IKUT_BI : formatAmount(f[key]![t]!, t));
+      const show = (f: Fields) => (f[key]?.[t] === undefined ? absent : formatAmount(f[key]![t]!, t));
       add(`${label} ${t}`, show(x), show(y));
     }
   };
   perToken('Limit per transaksi', 'max_per_tx');
   perToken('Limit penerbitan', 'max_mint_per_tx');
   perToken('Limit harian', 'daily_limit');
+  perToken('Saldo maksimal', 'max_balance', TANPA_BATAS);
+  perToken('Saldo minimal', 'min_balance', TANPA_BATAS);
+  perToken('Suplai maksimal', 'max_supply', TANPA_BATAS);
   for (const t of TOKENS) {
     const show = (f: Fields) => (f.hours?.[t] ? formatHours(f.hours[t]!) : IKUT_BI);
     add(`Jam operasional ${t}`, show(x), show(y));
@@ -69,8 +74,13 @@ export function diffDocs(a: PolicyDoc, b: PolicyDoc): Change[] {
     const delta = [...kb.filter((k) => !ka.includes(k)).map((k) => `+${date(k)}`), ...ka.filter((k) => !kb.includes(k)).map((k) => `−${date(k)}`)];
     if (delta.length) out.push({ label: 'Hari libur', from: `${ka.length} tanggal`, to: `${kb.length} tanggal (${delta.join(', ')})` });
   }
-  if (x.frozen || y.frozen) add('Pembekuan', names(x.frozen), names(y.frozen));
-  if (x.counterparties || y.counterparties) add('Counterparty', names(x.counterparties), names(y.counterparties));
+  // lists of banks are sets: a different order is no change
+  const sameSet = (p: string[] = [], q: string[] = []) => new Set(p).size === new Set(q).size && p.every((i) => q.includes(i));
+  const addSet = (label: string, p: string[] | undefined, q: string[] | undefined) => {
+    if (!sameSet(p, q)) out.push({ label, from: names(p), to: names(q) });
+  };
+  if (x.frozen || y.frozen) addSet('Pembekuan', x.frozen, y.frozen);
+  if (x.counterparties || y.counterparties) addSet('Counterparty', x.counterparties, y.counterparties);
   return out;
 }
 

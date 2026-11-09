@@ -2,7 +2,8 @@ import { execFile } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { BankPolicy, BiPolicy, Owner, PolicyDoc } from './types.ts';
+import { PLATFORMS } from './platforms.ts';
+import type { BankPolicy, BiPolicy, ByPlatform, Owner } from './types.ts';
 
 function run(bin: string, args: string[], allowFail = false): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -16,37 +17,37 @@ function run(bin: string, args: string[], allowFail = false): Promise<string> {
 
 // Drives the pinned `opa` binary over besu/opa. Lensa owns only the editable keys; everything else stays as in git.
 export class Opa {
-  constructor(private readonly bin: string, private readonly opaRoot: string) {}
+  // keysDir holds <keyId>.pem, the owners' private signing keys (outside the repo); without it bundles are built unsigned.
+  constructor(private readonly bin: string, private readonly opaRoot: string, private readonly keysDir?: string) {}
 
-  // Copies both bundles into outDir (bi/, bank/) and overlays the editable keys. The bank document belongs to
-  // `node` and is chosen by the caller (node 1 always gets seeds/bank-bi.json), so `node` does not alter the output.
-  assemble(_node: 1 | 2 | 3 | 4, bi: BiPolicy, bank: BankPolicy, outDir: string): void {
+  // Copies both bundles into outDir (bi/, bank/) and overlays the editable documents, one per registered platform:
+  // data.bi.config.policy = { zeto, noto, ... } next to BI's structural keys and data.bi.config.platforms (the registered
+  // ids, which the validators check for a missing document), data.bank.config = { policy: { zeto, noto, ... } }. The bank
+  // documents belong to `node` and are chosen by the caller (node 1 always gets seeds/bank-bi.json), so `node` does not alter the output.
+  assemble(_node: 1 | 2 | 3 | 4, bi: ByPlatform<BiPolicy>, bank: ByPlatform<BankPolicy>, outDir: string): void {
     mkdirSync(outDir, { recursive: true, mode: 0o700 });
     cpSync(join(this.opaRoot, 'bundles/bi'), join(outDir, 'bi'), { recursive: true });
     cpSync(join(this.opaRoot, 'bundles/bank'), join(outDir, 'bank'), { recursive: true });
 
-    // Rego reads the two limits under zeto; hours, holidays and frozen sit at the top. Write mint cap and frozen
-    // always: mint fails closed without the cap, a missing frozen key fails open.
     const biFile = join(outDir, 'bi/bi/config/data.json');
     const data = JSON.parse(readFileSync(biFile, 'utf8'));
-    data.zeto = { ...data.zeto, max_per_tx: bi.max_per_tx, max_mint_per_tx: bi.max_mint_per_tx };
-    data.hours = bi.hours;
-    data.holidays = bi.holidays;
-    data.frozen = bi.frozen;
+    data.platforms = [...PLATFORMS];
+    data.policy = bi; // optional keys left undefined (Noto balance limits) are not written
     writeFileSync(biFile, JSON.stringify(data, null, 2), { mode: 0o600 });
 
     const bankDir = join(outDir, 'bank/bank/config');
     mkdirSync(bankDir, { recursive: true });
-    writeFileSync(join(bankDir, 'data.json'), JSON.stringify(bank, null, 2), { mode: 0o600 });
+    writeFileSync(join(bankDir, 'data.json'), JSON.stringify({ policy: bank }, null, 2), { mode: 0o600 });
   }
 
-  // Validators are sets of Indonesian messages (empty = valid). The bank check reads data.bi.config too, so both
-  // bundles are assembled. Without --strict-builtin-errors: the date check relies on time.parse_ns failing quietly.
-  async check(owner: Owner, doc: PolicyDoc, bi: BiPolicy): Promise<string[]> {
+  // Validators are sets of Indonesian messages (empty = valid). `bi` and `bank` are the composed documents of both platforms
+  // (the draft in its platform, the current document in the other); the rego checks every platform. The bank check reads
+  // data.bi.config too, so both bundles are assembled. Without --strict-builtin-errors: the date check relies on time.parse_ns failing quietly.
+  async check(owner: Owner, bi: ByPlatform<BiPolicy>, bank: ByPlatform<BankPolicy>): Promise<string[]> {
     const isBi = owner === 'bi';
     const dir = mkdtempSync(join(tmpdir(), 'lensa-opa-'));
     try {
-      this.assemble(2, isBi ? (doc as BiPolicy) : bi, isBi ? { counterparties: [] } : (doc as BankPolicy), dir);
+      this.assemble(2, bi, bank, dir);
       const out = await run(this.bin, [
         'eval', '--format', 'json', '-b', join(dir, 'bi'), '-b', join(dir, 'bank'),
         isBi ? 'data.bi.check.errors' : 'data.bank.check.errors',
@@ -67,7 +68,11 @@ export class Opa {
     return { passed: results.filter((t) => !t.fail && !t.error && !t.skip).length, total: results.length };
   }
 
-  async build(bundleDir: string, revision: string, outFile: string): Promise<void> {
-    await run(this.bin, ['build', '-b', bundleDir, '--revision', revision, '-o', outFile]);
+  // keyId names the owner's key: the gateway pins it per bundle (`signing.keyid`), so a bundle signed with another key is refused.
+  async build(bundleDir: string, revision: string, outFile: string, keyId?: string): Promise<void> {
+    const sign = this.keysDir && keyId
+      ? ['--signing-key', join(this.keysDir, `${keyId}.pem`), '--signing-alg', 'RS256', '--verification-key-id', keyId]
+      : [];
+    await run(this.bin, ['build', '-b', bundleDir, '--revision', revision, ...sign, '-o', outFile]);
   }
 }

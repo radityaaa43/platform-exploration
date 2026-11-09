@@ -295,11 +295,12 @@ Native `<dialog>` "Mulai stress test?" (`--r-card`, `--lift`), buttons "Mulai" (
 
 ### 7.14 Kebijakan  · Flow (2026-11-05)
 
-Route `/besu/zeto/kebijakan`, Alat group, shield icon. Built from the existing tokens and components; no new colour.
+Routes `/besu/zeto/kebijakan`, `/besu/noto/kebijakan`, `/fabricx/kebijakan` and `/iroha3/kebijakan` (every platform in the server registry; `/api/meta` `models[m].policy` says which), Alat group, shield icon. The screen shows and edits the documents of the platform in the URL only: each platform has its own versions, pending change and history (the card reads "Versi berlaku {model name}"; the gateway card counts the gateways on that platform's version). Built from the existing tokens and components; no new colour.
 - **Top**: three `StatCard`s: "Versi berlaku" (blue, `v{n}`, "Terbit {WIB}"), "Gateway memakai versi ini" (green, "{x} dari {y}", or the error-coloured "Belum diterapkan: gateway belum terpasang"), "Menunggu persetujuan" (peach, "1 perubahan" or "Tidak ada").
+- **Not enforced**: a platform registered but not enforced by a gateway yet (Fabric-X, Iroha 3) shows a one-line hint (`.hint`) above "Masuk sebagai": "Belum ditegakkan gateway: dokumen dapat disusun, tetapi belum memengaruhi transaksi". Where the platform has no daily-usage source the "Terpakai hari ini" cell reads "Pemakaian harian belum tersedia untuk platform ini".
 - **"Masuk sebagai"**: a text input (max 60) with the hint "Nama yang dicatat pada setiap pengajuan dan persetujuan. Penyetuju harus orang yang berbeda dari pembuat." The name is kept per browser.
 - **Tabs** (`.utabs`, underline): "Kebijakan berlaku", "Ubah kebijakan", "Persetujuan" (a count chip while a change waits), "Riwayat versi". Failures show in one `role="alert"` block under the tabs (`.polalert`), with the server's `errors` as a list; the tab does not move.
-- **Kebijakan berlaku**: sections (`.polsec`: `h3`, owner in `--muted` such as "Diatur BI · hanya-baca"), plain tables (`.poltbl`, §7.6 style), hours tiles with a week strip and an "Buka"/"Tutup" badge, a "Terpakai hari ini" bar with `{used} · {pct}%`, "dibekukan BI" and "Dibekukan" badges (`off`), "Aktif" (`clear`). BI also sees every bank's document read-only, and a dashed "Belum tersedia di Zeto (off-chain)" block for rules that need on-chain data.
+- **Kebijakan berlaku**: sections (`.polsec`: `h3`, owner in `--muted` such as "Diatur BI · hanya-baca"), plain tables (`.poltbl`, §7.6 style), hours tiles with a week strip and an "Buka"/"Tutup" badge, a "Terpakai hari ini" bar with `{used} · {pct}%`, "dibekukan BI" and "Dibekukan" badges (`off`), "Aktif" (`clear`). BI also sees every bank's document read-only, and a dashed "Belum tersedia di Zeto (off-chain)" block for rules that need on-chain data (on Noto, the "Saldo dan suplai" section instead).
 - **Ubah kebijakan**: one form for the acting party's own document, submit "Ajukan untuk persetujuan"; after submitting, "Buka persetujuan". The old policy stays in force until approval.
 - **Persetujuan**: five-step line "Ubah", "Uji otomatis", "Ajukan", "Disetujui orang kedua", "Terbit ke gateway"; a diff table (Parameter, Berlaku, Usulan) with only changed values; "Alasan"; the auto-test line ("Uji kebijakan otomatis: {n} dari {m} lolos"); a notice for banks that become inactive. Buttons "Setujui dan terbitkan", "Tolak" (note required), "Batalkan draf"; after a failed publish, "Terbitkan ulang". Empty: "Tidak ada perubahan yang menunggu persetujuan".
 - **Riwayat versi**: table (Versi, Perubahan, Pembuat, Penyetuju, Terbit, Tindakan); "Kembalikan" makes a new draft that still needs a second person.
@@ -358,12 +359,12 @@ Per platform/model, ?pihak=BI|A|B|C on every URL:
   /transfer   Transfer: form (7.9) → progress → lens
   /dvp        DvP (bank) or Penjualan perdana (BI)
   /lensa/:tx  Lensa (7.10)
-  /kebijakan  Kebijakan (7.14), Besu Zeto only
+  /kebijakan  Kebijakan (7.14), every platform with a policy document (Zeto, Noto, Fabric-X, Iroha 3)
   /laporan    Laporan ke BI (7.11), Zeto + Fabric-X
   /tps        Stress test TPS: config · live line chart · bar chart (7.8)
 ```
 
-Sidebar items in order: "Dasbor", "Riwayat", "Transfer", "DvP", then under "Alat": "Lensa", "Kebijakan", "Laporan ke BI", "Stress test TPS". Footer: "Ganti platform". Disabled items stay in the nav with their reason, never hidden ("Laporan ke BI" for a bank: "Hanya BI yang menerima laporan"; hidden on Iroha 3; "Kebijakan" off Zeto: "Belum tersedia di platform ini" on Fabric-X and Iroha 3, "Kebijakan saat ini hanya untuk Zeto" on Noto and Stealth).
+Sidebar items in order: "Dasbor", "Riwayat", "Transfer", "DvP", then under "Alat": "Lensa", "Kebijakan", "Laporan ke BI", "Stress test TPS". Footer: "Ganti platform". Disabled items stay in the nav with their reason, never hidden ("Laporan ke BI" for a bank: "Hanya BI yang menerima laporan"; hidden on Iroha 3; "Kebijakan" on a model the server did not register (Stealth): "Kebijakan belum tersedia untuk Stealth", from `/api/meta`).
 
 Data per screen is as in ARCHITECTURE.md §3.3; this restyle adds no route and no request, except the Kebijakan screen and its `/api/policy` requests (ARCHITECTURE.md §8).
 

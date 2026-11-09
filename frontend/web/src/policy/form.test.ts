@@ -13,10 +13,25 @@ test('parseAmount accepts plain digits and dotted thousands', () => {
 });
 
 test.each([
-  ['', POS], ['0', POS], ['-1', POS], ['2,5', POS], ['2.5', POS], ['1e3', POS], ['1.00', POS], ['abc', POS],
+  ['', POS], ['0', POS], ['007', POS], ['00', POS], ['01.000', POS], ['0.000', POS], ['-1', POS], ['2,5', POS], ['2.5', POS], ['1e3', POS], ['1.00', POS], ['abc', POS],
   ['1.000.000.000.000.001', MAX], ['99999999999999999999', MAX],
 ])('parseAmount(%j) is the error %s', (s, msg) => {
   expect(parseAmount(s)).toBe(msg);
+});
+
+test('diffDocs compares Pembekuan and Counterparty as sets: reordering is no change', () => {
+  const b = bi();
+  b.frozen = ['bankC@node4', 'bankB@node3'];
+  const b2 = bi();
+  b2.frozen = ['bankB@node3', 'bankC@node4'];
+  expect(diffDocs(b, b2)).toEqual([]);
+  b2.frozen = ['bankB@node3'];
+  expect(diffDocs(b, b2).map((d) => d.label)).toEqual(['Pembekuan']);
+  const k = bank();
+  const k2 = bank();
+  k.counterparties = ['bankA@node2', 'bankB@node3'];
+  k2.counterparties = ['bankB@node3', 'bankA@node2'];
+  expect(diffDocs(k, k2)).toEqual([]);
 });
 
 test('formatAmount', () => {
@@ -129,4 +144,17 @@ test('openNow: nothing within 14 days is just closed', () => {
   expect(openNow({ days: [], open: '08:00', close: '18:00' }, [], at('2026-11-05T03:00:00Z'))).toEqual({ open: false, label: 'Tutup' });
   const hol = Array.from({ length: 15 }, (_, i) => ({ date: new Date(Date.UTC(2026, 10, 5 + i)).toISOString().slice(0, 10) }));
   expect(openNow(WEEK, hol, at('2026-11-05T03:00:00Z'))).toEqual({ open: false, label: 'Tutup' });
+});
+
+test('diffDocs names the Noto balance controls; a missing one reads "Tanpa batas"', () => {
+  const b = bi();
+  b.max_balance = { RD: 5_000_000_000 };
+  b.max_supply = { DFABI: 100_000 };
+  expect(diffDocs(bi(), b)).toEqual([
+    { label: 'Saldo maksimal RD', from: 'Tanpa batas', to: 'Rp 5.000.000.000' },
+    { label: 'Suplai maksimal DFABI', from: 'Tanpa batas', to: '100.000 unit' },
+  ]);
+  const c = { ...b, min_balance: { DFABI: 10 } };
+  expect(diffDocs(b, c)).toEqual([{ label: 'Saldo minimal DFABI', from: 'Tanpa batas', to: '10 unit' }]);
+  expect(diffDocs(c, bi()).map((d) => d.to)).toEqual(['Tanpa batas', 'Tanpa batas', 'Tanpa batas']);
 });

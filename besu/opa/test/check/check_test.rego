@@ -4,22 +4,34 @@ import data.bank.check as bank_check
 import data.bi.check as bi_check
 import data.fixtures
 
+# The helpers patch the Zeto document; the Noto ones (bi_errors_noto, bank_errors_noto) patch the Noto document and leave
+# the Zeto one valid, the way the Lensa server composes a draft of one platform with the current document of the other.
 bi_errors(patch) := e if {
-	e := bi_check.errors with data.bi.config as object.union(fixtures.bi, patch)
+	e := bi_check.errors with data.bi.config as fixtures.bi_with("zeto", patch)
 }
 
+bi_errors_noto(patch) := e if {
+	e := bi_check.errors with data.bi.config as fixtures.bi_with("noto", patch)
+}
+
+# paths are relative to the Zeto document
 bi_errors_without(paths) := e if {
-	e := bi_check.errors with data.bi.config as json.remove(fixtures.bi, paths)
+	e := bi_check.errors with data.bi.config as json.remove(fixtures.bi, [concat("/", ["policy/zeto", x]) | some x in paths])
 }
 
 bank_errors(patch) := e if {
-	e := bank_check.errors with data.bank.config as object.union(fixtures.bank_a, patch)
+	e := bank_check.errors with data.bank.config as fixtures.bank_with("zeto", patch)
+		with data.bi.config as fixtures.bi
+}
+
+bank_errors_noto(patch) := e if {
+	e := bank_check.errors with data.bank.config as fixtures.bank_with("noto", patch)
 		with data.bi.config as fixtures.bi
 }
 
 bank_errors_with_bi(patch, bi_patch) := e if {
-	e := bank_check.errors with data.bank.config as object.union(fixtures.bank_a, patch)
-		with data.bi.config as object.union(fixtures.bi, bi_patch)
+	e := bank_check.errors with data.bank.config as fixtures.bank_with("zeto", patch)
+		with data.bi.config as fixtures.bi_with("zeto", bi_patch)
 }
 
 test_seed_documents_valid if {
@@ -31,25 +43,25 @@ test_seed_documents_valid if {
 # BI document
 
 test_bi_amount_not_positive_integer if {
-	bi_errors({"zeto": {"max_per_tx": {"RD": 0}}}) == {"Limit per transaksi RD: harus bilangan bulat positif"}
-	bi_errors({"zeto": {"max_per_tx": {"DFABI": -5}}}) == {"Limit per transaksi DFABI: harus bilangan bulat positif"}
-	bi_errors({"zeto": {"max_per_tx": {"RD": 1.5}}}) == {"Limit per transaksi RD: harus bilangan bulat positif"}
-	bi_errors({"zeto": {"max_per_tx": {"RD": "100"}}}) == {"Limit per transaksi RD: harus bilangan bulat positif"}
-	bi_errors({"zeto": {"max_mint_per_tx": {"DFABI": 0}}}) == {"Limit penerbitan DFABI: harus bilangan bulat positif"}
+	bi_errors({"max_per_tx": {"RD": 0}}) == {"Limit per transaksi RD: harus bilangan bulat positif"}
+	bi_errors({"max_per_tx": {"DFABI": -5}}) == {"Limit per transaksi DFABI: harus bilangan bulat positif"}
+	bi_errors({"max_per_tx": {"RD": 1.5}}) == {"Limit per transaksi RD: harus bilangan bulat positif"}
+	bi_errors({"max_per_tx": {"RD": "100"}}) == {"Limit per transaksi RD: harus bilangan bulat positif"}
+	bi_errors({"max_mint_per_tx": {"DFABI": 0}}) == {"Limit penerbitan DFABI: harus bilangan bulat positif"}
 }
 
 test_bi_amount_missing if {
-	bi_errors_without(["zeto/max_mint_per_tx/RD"]) == {"Limit penerbitan RD: harus bilangan bulat positif"}
-	bi_errors_without(["zeto/max_per_tx"]) == {
+	bi_errors_without(["max_mint_per_tx/RD"]) == {"Limit penerbitan RD: harus bilangan bulat positif"}
+	bi_errors_without(["max_per_tx"]) == {
 		"Limit per transaksi RD: harus bilangan bulat positif",
 		"Limit per transaksi DFABI: harus bilangan bulat positif",
 	}
 }
 
 test_bi_amount_too_large if {
-	bi_errors({"zeto": {"max_per_tx": {"RD": 1000000000000001}}}) == {"Limit per transaksi RD: melebihi 1.000.000.000.000.000"}
-	bi_errors({"zeto": {"max_mint_per_tx": {"RD": 1000000000000001}}}) == {"Limit penerbitan RD: melebihi 1.000.000.000.000.000"}
-	count(bi_errors({"zeto": {"max_per_tx": {"RD": 1000000000000000}}})) == 0
+	bi_errors({"max_per_tx": {"RD": 1000000000000001}}) == {"Limit per transaksi RD: melebihi 1.000.000.000.000.000"}
+	bi_errors({"max_mint_per_tx": {"RD": 1000000000000001}}) == {"Limit penerbitan RD: melebihi 1.000.000.000.000.000"}
+	count(bi_errors({"max_per_tx": {"RD": 1000000000000000}})) == 0
 }
 
 test_bi_hours_format if {
@@ -137,7 +149,7 @@ test_counterparty_unknown_node_error if {
 }
 
 test_bank_counterparties_missing if {
-	bank_check.errors == {"Counterparty: harus berupa daftar"} with data.bank.config as {}
+	bank_check.errors == {"Counterparty: harus berupa daftar"} with data.bank.config as {"policy": {"zeto": {}, "noto": fixtures.bank_doc, "fabricx": fixtures.bank_doc, "iroha3": fixtures.bank_doc}}
 		with data.bi.config as fixtures.bi
 }
 
@@ -179,4 +191,74 @@ test_bank_hours_inside_bi if {
 
 test_bank_hours_full_day_default_bi if {
 	count(bank_errors({"hours": {"DFABI": {"days": [1, 7], "open": "00:00", "close": "24:00"}}})) == 0
+}
+
+# Per platform: every document is checked, a missing one is an error, and a bank document is compared with BI's document
+# of the same platform.
+
+test_bi_checks_every_platform if {
+	bi_errors({"max_per_tx": {"RD": 0}}) == {"Limit per transaksi RD: harus bilangan bulat positif"}
+	bi_errors_noto({"max_per_tx": {"RD": 0}}) == {"Limit per transaksi RD: harus bilangan bulat positif"}
+	bi_errors_noto({"frozen": ["bankZ@node9"]}) == {"Pembekuan: bankZ@node9 bukan peserta"}
+	bi_errors_noto({"hours": {"RD": {"open": "9:00"}}}) == {"Jam RD: format harus JJ:MM"}
+	bi_errors_noto({"holidays": [{"date": "2026-02-30", "name": "x"}]}) == {"Hari libur 2026-02-30: tanggal tidak valid"}
+}
+
+test_bi_missing_platform_document if {
+	bi_check.errors == {"Kebijakan noto: dokumen tidak ada"} with data.bi.config as json.remove(fixtures.bi, ["policy/noto"])
+	bi_check.errors == {"Kebijakan zeto: dokumen tidak ada"} with data.bi.config as json.remove(fixtures.bi, ["policy/zeto"])
+}
+
+test_bank_checks_every_platform if {
+	bank_errors_noto({"counterparties": ["bankZ@node9"]}) == {"Counterparty: bankZ@node9 bukan peserta"}
+	bank_errors_noto({"daily_limit": {"RD": 0}}) == {"Limit harian RD: harus bilangan bulat positif"}
+	bank_errors_noto({"hours": {"RD": {"days": [1], "open": "9:00", "close": "17:00"}}}) == {"Jam RD: format harus JJ:MM"}
+}
+
+test_bank_missing_platform_document if {
+	bank_check.errors == {"Kebijakan noto: dokumen tidak ada"} with data.bank.config as json.remove(fixtures.bank_a, ["policy/noto"])
+		with data.bi.config as fixtures.bi
+}
+
+# The bank's Noto document is compared with BI's Noto document, not the Zeto one.
+test_bank_compares_with_same_platform if {
+	bi := fixtures.bi_with("noto", {"max_per_tx": {"RD": 500}, "hours": {"RD": {"days": [1], "open": "06:00", "close": "18:00"}}})
+	bank_check.errors == {"Limit per transaksi RD: tidak boleh lebih longgar dari batas BI"} with data.bank.config as fixtures.bank_with("noto", {"max_per_tx": {"RD": 501}})
+		with data.bi.config as bi
+	bank_check.errors == {"Jam RD: harus di dalam jam operasional BI"} with data.bank.config as fixtures.bank_with("noto", {"hours": {"RD": {"days": [1, 2], "open": "08:00", "close": "17:00"}}})
+		with data.bi.config as bi
+
+	# the same values are fine for Zeto, where BI's cap is 1bn and hours are all day
+	count(bank_check.errors) == 0 with data.bank.config as fixtures.bank_with("zeto", {"max_per_tx": {"RD": 501}, "hours": {"RD": {"days": [1, 2], "open": "08:00", "close": "17:00"}}})
+		with data.bi.config as bi
+}
+
+# Every registered platform is validated like zeto and noto, and a missing document is named for each of them.
+test_bi_missing_document_for_every_registered_platform if {
+	bi_check.errors == {"Kebijakan fabricx: dokumen tidak ada"} with data.bi.config as json.remove(fixtures.bi, ["policy/fabricx"])
+	bi_check.errors == {"Kebijakan iroha3: dokumen tidak ada"} with data.bi.config as json.remove(fixtures.bi, ["policy/iroha3"])
+}
+
+test_bank_missing_document_for_every_registered_platform if {
+	bank_check.errors == {"Kebijakan fabricx: dokumen tidak ada"} with data.bank.config as json.remove(fixtures.bank_a, ["policy/fabricx"])
+		with data.bi.config as fixtures.bi
+	bank_check.errors == {"Kebijakan iroha3: dokumen tidak ada"} with data.bank.config as json.remove(fixtures.bank_a, ["policy/iroha3"])
+		with data.bi.config as fixtures.bi
+}
+
+test_bi_and_bank_check_fabricx_and_iroha3_documents if {
+	bi_check.errors == {"Limit per transaksi RD: harus bilangan bulat positif"} with data.bi.config as fixtures.bi_with("fabricx", {"max_per_tx": {"RD": 0}})
+	bi_check.errors == {"Pembekuan: bankZ@node9 bukan peserta"} with data.bi.config as fixtures.bi_with("iroha3", {"frozen": ["bankZ@node9"]})
+	bank_check.errors == {"Counterparty: bankZ@node9 bukan peserta"} with data.bank.config as fixtures.bank_with("fabricx", {"counterparties": ["bankZ@node9"]})
+		with data.bi.config as fixtures.bi
+	bank_check.errors == {"Limit harian RD: harus bilangan bulat positif"} with data.bank.config as fixtures.bank_with("iroha3", {"daily_limit": {"RD": 0}})
+		with data.bi.config as fixtures.bi
+}
+
+# The list of platforms is data: a platform the registry adds later needs a document without any change to the rules.
+test_registered_platforms_come_from_data if {
+	bi_check.errors == {"Kebijakan baru: dokumen tidak ada"} with data.bi.config as object.union(fixtures.bi, {"platforms": ["zeto", "baru"]})
+	bank_check.errors == {"Kebijakan baru: dokumen tidak ada"} with data.bank.config as fixtures.bank_a
+		with data.bi.config as object.union(fixtures.bi, {"platforms": ["zeto", "baru"]})
+	count(bi_check.errors) == 0 with data.bi.config as object.union(fixtures.bi, {"platforms": ["zeto"]})
 }

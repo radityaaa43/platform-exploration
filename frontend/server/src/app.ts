@@ -11,6 +11,7 @@ import {
 import { probeNodes, type Probe } from './health.ts';
 import { HEALTH_MS, StressRun, validateStress, type StressConfig } from './stress.ts';
 import { toCsv } from './stats.ts';
+import { REGISTRY, isPlatform } from './policy/platforms.ts';
 import { registerPolicyRoutes, registerPolicyUnavailable, type PolicyDeps } from './policy/routes.ts';
 
 type Adapters = Partial<Record<ModelId, ModelAdapter>>;
@@ -63,6 +64,9 @@ const receiptQuery = {
 
 const json =(v: unknown) => JSON.stringify(v, (_k, x) => (typeof x === 'bigint' ? x.toString() : x));
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+// An OPA gateway deny reaches the Paladin SDK as an axios error with status 403 (raw text: "Request failed with status code 403").
+const isGatewayDeny = (e: unknown) => (e as { isAxiosError?: boolean; response?: { status?: number } } | null)?.isAxiosError === true
+  && (e as { response?: { status?: number } }).response?.status === 403;
 
 // No server internals in what a client receives (ARCHITECTURE.md §2.2): cut a CLI command line, drop `--kubeconfig …`,
 // replace absolute paths. URLs survive: their '/' never follows whitespace, a quote, '(', '=', ':' or ','.
@@ -152,7 +156,9 @@ export function buildApp(adapters: Adapters, opts: { webDist?: string; probe?: P
       parties: PARTIES, flows: FLOWS,
       models: Object.fromEntries(MODELS.map((m) => {
         const a = adapters[m];
-        return [m, { name: MODEL_NAMES[m], available: !!a, stepLabels: a?.stepLabels ?? [], capabilities: a ? a.capabilities() : unavailable }];
+        // Kebijakan: a model with a policy document (the registry in policy/platforms.ts) and whether a gateway enforces it
+        const policy = isPlatform(m) ? { registered: true, enforced: REGISTRY[m].enforced } : { registered: false, enforced: false, reason: `Kebijakan belum tersedia untuk ${MODEL_NAMES[m]}` };
+        return [m, { name: MODEL_NAMES[m], available: !!a, stepLabels: a?.stepLabels ?? [], capabilities: a ? a.capabilities() : unavailable, policy }];
       })),
     };
   });
@@ -267,7 +273,8 @@ export function buildApp(adapters: Adapters, opts: { webDist?: string; probe?: P
       })(), TX_DEADLINE_MS, 'Transaksi');
       emit('result', out);
     } catch (e) {
-      emit('error', { reason: msg(e) });
+      if (isGatewayDeny(e)) app.log.error({ err: e }, `tx ${req.model} ${req.flow} denied by gateway`); // the original stays in the log
+      emit('error', { reason: isGatewayDeny(e) ? `Ditolak kebijakan di gateway ${PARTIES[req.from].name}` : msg(e) }); // Paladin calls go through the initiator's gateway
     } finally {
       closed = true;
       run.done = true;
