@@ -1,6 +1,10 @@
-# AGENT — Senior Blockchain Engineer (`blockhain`)
+# AGENT — Senior Blockchain Engineer (`iroha`, iroha3/)
 
 Read [`../TEAM.md`](../TEAM.md) first. This file adds what is specific to the blockchain role.
+
+> **Scope change 2026-11-10:** `besu/` moved to `besu` (`../besu/AGENT.md`) and `fabric-x/`
+> moved to `fabric` (`../fabric/AGENT.md`). `iroha3/` moved to `iroha` (`../iroha/AGENT.md`). This file is
+> legacy reference only; no session uses it.
 
 ## Role
 

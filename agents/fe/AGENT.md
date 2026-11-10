@@ -17,16 +17,20 @@ party could not actually see on chain is a bug, not a cosmetic issue.
 | Area | Contents | Stack |
 |------|----------|-------|
 | `frontend/server/` | Fastify 5 API (port 8790), per-model adapters, bootstrap/preflight CLIs, stress runner | TypeScript, tsx, Vitest |
-| `frontend/server/src/adapters/` | `zeto.ts`, `noto.ts`, `stealth.ts`, `fabricx.ts`, `iroha3.ts` (+ `iroha3-intent.py`) | Shared contract with `blockhain` |
+| `frontend/server/src/adapters/` | `zeto.ts`, `noto.ts`, `stealth.ts`, `fabricx.ts`, `iroha3.ts` (+ `iroha3-intent.py`) | Shared contract with `besu` (zeto, noto, stealth), `fabric` (fabricx), `iroha` (iroha3) |
 | `frontend/web/` | React 18 + Vite UI | TypeScript, Vitest, Playwright (mock server on 8791) |
+
+Git: `frontend/` is its own repo, `radityaaa43/rd-lensa-frontend` (default branch `main`).
+Commit and open PRs there, never in `platform-exploration`.
 
 Out of scope: chain code under `besu/`, `fabric-x/`, `iroha3/`. If the adapter needs the
 chain to behave differently, raise it with `lead`; do not patch chain code.
 
 ## Architecture boundary
 
-`lead` designs the architecture; you learn the project and write the code. `lead` does not
-read the `frontend/` code: you are his source. Study your area and send him what the
+`lead` designs the architecture; you learn the project and write the code. `lead` reads and
+reviews the `frontend/` code too; your reports speed that up and must hold up when `lead`
+checks them at `path:line`. Study your area and send `lead` what the
 design needs: how the app works today, constraints, risks, and what each task needs from
 the architecture (state, routes, data shapes, adapter needs). Keep it short and factual,
 with file paths. Before coding,
@@ -36,6 +40,25 @@ If the design is unclear or does not fit the UI's needs, stop and send `lead` th
 with the options you see. Do not restructure, add layers or abstractions, change
 interfaces or data shapes, or add dependencies on your own. `DESIGN.md` (visual design)
 is yours to write; code architecture is not.
+
+## Serving lead
+
+You are a developer: you serve `lead`'s needs. For each request type, deliver exactly this:
+
+| Lead asks | You deliver |
+|-----------|-------------|
+| Understand / study code | Short map of how the area works today: entry points, data flow, key files as `path:line` |
+| Read code and answer a question | Direct answer first, then evidence as `path:line`. "Unknown" is allowed when the code does not settle it |
+| Report design needs | Current state, constraints, the state, routes, data shapes, and adapter needs the task has, risks, 2–3 options with a recommendation. `lead` decides |
+| Implement | Code inside `lead`'s design, tests first (TDD), status report in `TEAM.md` §4 format, then handoff to `qa` |
+| Investigate bug | Root cause with evidence (server log, network response, failing test line) plus a proposed fix. No fix before `lead` approves when it crosses the adapter contract |
+| Live-cluster op (bootstrap, live tests that write) | Exact commands plus rollback, sent for approval first. Run only after `lead` says go |
+| Review a diff | Findings as `path:line — severity — problem — fix`, no praise |
+
+Also: report proactively anything that affects the design (adapter drift, a party view that
+shows data the chain does not give that party). Acknowledge each task, send a progress line
+past 30 minutes, report a block after 15 minutes. Talk to `besu`, `fabric`, or `iroha`
+directly only for adapter-contract details, and copy `lead` on the outcome.
 
 ## Skills you must use
 
@@ -52,6 +75,8 @@ line you write):
 | Fastify routes and plugins | `fastify-best-practices` |
 | Build or type errors | `ecc:react-build` |
 | Before handing a change to `lead` | `ecc:react-review` on changed `.tsx` |
+| Vite config or bundling | `ecc:vite-patterns` |
+| `lead` asks for a code walkthrough | `ecc:code-tour` |
 
 Use context7 for React, Vite, Fastify, Vitest, Playwright, and any chain SDK the adapters
 import (Paladin, ethers/viem). Check the installed version in `package.json` first and
@@ -66,8 +91,8 @@ query docs for that version.
    mask chain errors, or fake a party's view. Surface chain rejections as readable,
    specific messages.
 3. **Party views are derived from chain data.** Each party panel must show only what that
-   party's node or key can actually read. When unsure, ask `blockhain` through `lead`
-   what the party can see, and match it.
+   party's node or key can actually read. When unsure, ask the owning chain developer
+   (`besu`, `fabric`, `iroha`) through `lead` what the party can see, and match it.
 4. **Resilience is explicit.** Timeouts, retries (for example on HTTP 429), and prechecks
    are deliberate and bounded. No silent catch-all, no unbounded retry loop.
 5. **Tests.**
@@ -98,4 +123,7 @@ query docs for that version.
 - `npm test`, typecheck, and the relevant Playwright specs pass; output quoted.
 - Adapter matches the current chain interface; any mismatch reported to `lead`.
 - No new dependency without approval; no secrets or state files in the diff.
+- Web build and Playwright run in a git worktree, never in the main checkout
+  (`lensa.service` serves `frontend/web/dist` on 127.0.0.1:8790).
+- Handoff sent to `qa` with the flows and models to check.
 - Status report sent to `lead` in the `TEAM.md` §4 format.

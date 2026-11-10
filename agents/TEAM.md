@@ -29,27 +29,31 @@ Known exemptions (do not re-litigate without new evidence):
 User (product owner, final authority)
   └── orchetrator   — user-facing coordinator, sets priorities, accepts work
         └── lead    — tech lead: plans, assigns, reviews, integrates
-              ├── blockhain — besu/, fabric-x/, iroha3/
-              └── fe        — frontend/
+              ├── besu      — developer: besu/ (Zeto, Noto + Pente, Stealth, OPA)
+              ├── fabric    — developer: fabric-x/
+              ├── iroha     — developer: iroha3/
+              ├── fe        — developer: frontend/
+              └── qa        — tester: QA gate for every track and the frontend
 ```
 
-Session names above are the SendMessage addresses. Spelling is exact (`blockhain`,
-`orchetrator`). Refs like `[f98c18]` change when a session restarts: run `ListAgents`
+Role files: `agents/<role>/AGENT.md` (`lead`, `besu`, `fabric`, `iroha`, `fe`, `qa`; `blockchain` is legacy reference).
+Session names above are the SendMessage addresses. Spelling is exact (`orchetrator`). The iroha3
+developer is `iroha` (old address `blockhain` retired 2026-11-10). Refs like `[f98c18]` change when a session restarts: run `ListAgents`
 and use the current name. After your own restart, announce your new ref to `lead`.
 
 ### Architecture ownership
 
 `lead` is the only architect. Code architecture is designed, decided, and written down by
 `lead`: module and directory structure, layering, interfaces and contracts between
-modules, data shapes, dependency choices, and design patterns. `blockhain` and `fe` do
-not decide architecture. They:
+modules, data shapes, dependency choices, and design patterns. The developers (`besu`,
+`fabric`, `iroha`, `fe`) do not decide architecture. They:
 
-0. **Be lead's eyes on the code.** `lead` does not read each project's code. Engineers
-   study their own area and send `lead` what the design needs: how the area works today,
-   constraints, what each task needs from the architecture (data shapes, interfaces,
-   limits, risks), and problems found. `lead` designs from these reports, not from
-   reading the code. Reports are short, factual, and cite file paths so `lead` can verify
-   one specific thing when it matters.
+0. **Support lead's own reading of the code.** `lead` reads and reviews the code of every
+   area itself. Engineers speed that up: they study their own area and send `lead` how it
+   works today, constraints, what each task needs from the architecture (data shapes,
+   interfaces, limits, risks), and problems found. Reports are short, factual, and cite
+   `path:line` so `lead` can check them against the code. They add to `lead`'s own
+   reading; they never replace it.
 1. **Learn the project first.** Read the code, docs, and `lead`'s design before coding.
 2. **Implement within the design `lead` gives them.** Follow the structure, interfaces,
    and patterns as specified.
@@ -65,13 +69,20 @@ engineer.
 
 | Path | Owner | Git |
 |------|-------|-----|
-| `besu/` (`zeto/`, `noto+pente/`, `stealth-address/`) | blockhain | platform-ekplorasi (remote `platform-exploration`) |
-| `fabric-x/` (`multiorg/`, `panurus-itest/`) | blockhain | platform-ekplorasi |
-| `iroha3/` | blockhain | **separate repo** `radityaaa43/iroha3-rd-dfabi` (ignored by the parent repo) |
-| `frontend/` (`server/` Fastify, `web/` React + Vite) | fe | platform-ekplorasi |
-| `agents/`, root `CLAUDE.md` | lead | platform-ekplorasi |
+| `besu/` (`zeto/`, `noto+pente/`, `stealth-address/`, `opa/`) | besu | **own repo** `radityaaa43/rd-besu` (nested, ignored by the parent repo) |
+| `fabric-x/` (`multiorg/`, `panurus-itest/`, `opa/`) | fabric | **own repo** `radityaaa43/rd-fabric-x` (nested, ignored by the parent repo) |
+| `iroha3/` | iroha | **own repo** `radityaaa43/iroha3-rd-dfabi` (nested, ignored by the parent repo) |
+| `frontend/` (`server/` Fastify, `web/` React + Vite) | fe | **own repo** `radityaaa43/rd-lensa-frontend` (nested, ignored by the parent repo) |
+| Test files in every area (`*.test.ts`, `e2e/`, `test/`, `*_test.go`) | qa (shared with the area owner) | the repo of that area |
+| `agents/`, root `CLAUDE.md` | lead | `radityaaa43/platform-exploration` (coordination repo only) |
 
-`frontend/server/src/adapters/*.ts` is the contract between the two engineers. The chain
+Since 2026-11-10 every project folder is its own git repo, nested inside the
+platform-ekplorasi checkout and ignored by it. Commit, branch, and open PRs in the
+folder's own repo (`git -C <folder> ...`). Never commit project files to
+`platform-exploration`. A change that spans two folders (for example a chain interface plus
+its adapter) is two PRs, one per repo, merged in the order `lead` sets.
+
+`frontend/server/src/adapters/*.ts` is the contract between `fe` and the chain developers. The chain
 side owns what the chain does; fe owns how the adapter calls it. Any change to chain
 interfaces (contract ABI, driver JSON, Torii calls, domain config, ids) must be announced
 to `lead` before merge so the adapter moves in the same change set.
@@ -92,6 +103,13 @@ to `lead` before merge so the adapter moves in the same change set.
   RISKS / OPEN: <anything the lead must decide>
   ```
 
+- **Developer contract.** Developers serve `lead`'s needs. `lead` tags each ask with a
+  type — `STUDY`, `ASK`, `DESIGN-NEEDS`, `IMPLEMENT`, `INVESTIGATE`, `CLUSTER-OP`,
+  `REVIEW` — and the developer returns the deliverable defined in the "Serving lead"
+  section of their `AGENT.md`. Developers also report design-relevant findings unasked.
+- **QA gate.** Developer → `qa` handoff after implementing; `qa` reports PASS / FAIL /
+  PARTIAL to `lead` and files defects to `lead`. `lead` marks a task done only after a
+  `qa` PASS, or a "not run" with a reason `lead` accepts.
 - **Blocked > 15 minutes** on the same problem: report it with the hypothesis you tested.
   Do not spin.
 - **No fabricated results.** If something was not run, say "not run". If a test fails,
@@ -110,7 +128,8 @@ Invoke these with the Skill tool (or the named MCP tools). They are not optional
 | New behavior or bug fix | `superpowers:test-driven-development` |
 | Before reporting "done" | `superpowers:verification-before-completion` |
 
-Role files add role-specific skills on top of this list.
+Role files add role-specific skills on top of this list (section "Skills" in each
+`agents/<role>/AGENT.md`). Use only skills that exist in the environment.
 
 ## 6. Engineering standards
 
@@ -147,11 +166,11 @@ Role files add role-specific skills on top of this list.
 
 ## 8. Parallel work
 
-`lead` plans work so that `fe` and `blockhain` run in parallel whenever the tasks are independent. Idle time is waste.
+`lead` plans work so that the developers and `qa` run in parallel whenever the tasks are independent. Idle time is waste.
 
 - **Plan for parallel.** Every task list marks what can run now, what depends on what, and who is blocked. Contract first
-  (`ARCHITECTURE.md`), then both engineers build against it at the same time, `fe` on the fake/mock adapter and
-  `blockhain` on the live chain. Do not serialize work that only shares a contract.
+  (`ARCHITECTURE.md`), then the developers build against it at the same time, `fe` on the fake/mock adapter and
+  the chain developer (`besu`, `fabric`, `iroha`) on the live chain, while `qa` writes the tests. Do not serialize work that only shares a contract.
 - **Disjoint files.** Parallel tasks touch disjoint files. If two tasks need the same file, `lead` sequences them or
   splits the file by design. Use a separate git worktree and branch per engineer for code that can overlap.
 - **Test in parallel.** Mock tests (vitest, tsc, Playwright on the mock server, Go and Foundry tests) run whenever they are
