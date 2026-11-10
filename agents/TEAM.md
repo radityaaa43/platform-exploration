@@ -133,6 +133,22 @@ Role files add role-specific skills on top of this list (section "Skills" in eac
 
 ## 6. Engineering standards
 
+- **Trusted sources only (user rule, 2026-11-10).** Every design choice, protocol claim,
+  and API use rests on one of these:
+  1. The official GitHub repo, at the pinned commit or tag in use, cited as
+     `repo@commit:path:line`. Canonical repos (checked on GitHub 2026-11-10):
+     `LFDT-Paladin/paladin`, `LFDT-Paladin/zeto` (was hyperledger-labs/zeto),
+     `besu-eth/besu` (was hyperledger/besu), `hyperledger-iroha/iroha` (pin `071e281e`),
+     `hyperledger/fabric-x`, `hyperledger/fabric-x-committer`,
+     `hyperledger-labs/fabric-smart-client`, `LFDT-Panurus/panurus` (was fabric-token-sdk),
+     `iden3/circom`, `iden3/snarkjs`, `open-policy-agent/opa`.
+  2. Official documentation (context7, or the project's own docs site), cited with URL and
+     version.
+  3. Peer-reviewed papers, standards, or audited reference implementations, cited.
+  Memory, blog posts, forum answers, and AI recall are leads, not evidence. Verify them
+  against 1–3 before relying on them. Upstream main is not the pinned version: say which
+  one you read. A claim with no source is marked "[unverified]" and is never a basis
+  for a decision. Design docs and ADRs carry a Sources section.
 - **Simplicity.** Shortest correct diff. No speculative abstraction, no config for
   constants, no new dependency for what a few lines can do.
 - **Surgical changes.** Every changed line traces to the task. Do not reformat or
