@@ -42,8 +42,9 @@ const SUB_KEBIJAKAN_BI = 'Aturan off-chain di gateway setiap bank. BI mengatur j
 let initialLoad = true;
 
 function stressProgress(s: StressSnapshot) {
-  const done = Object.values(s.models).reduce((n, m) => n + (m ? m.summary.ok + m.summary.failed : 0), 0);
-  return `${done}/${s.config.count * s.config.models.length}`;
+  const done = Object.values(s.models).reduce((n, m) => n + (m ? m.ok + m.failed : 0), 0);
+  const cur = Object.values(s.models).find((m) => m?.status === 'running');
+  return `${cur ? `tahap ${cur.stages.length}/${cur.plan.length} · ` : ''}${done.toLocaleString('id-ID')}`;
 }
 
 // ARCHITECTURE.md §3.3: one App-level poll each for health (5 s), network of the current model (10 s), stress (5 s while running)
@@ -75,8 +76,8 @@ function Shell({ meta, route, stress, reloadStress, tx }: { meta: Meta; route: M
         )}
         {PLATFORM_OF[route.model] === 'iroha3' && (
           <details className="banner iroha">
-            <summary>Iroha 3 tanpa privasi: keempat pihak melihat semua transaksi dalam bentuk terbuka. Selengkapnya</summary>
-            <p>Torii hanya membatasi akun yang boleh membaca. Itu kontrol akses, bukan kerahasiaan.</p>
+            <summary>Iroha 3: DvP dan award privat lewat APS, transfer satu pihak masih terbuka untuk keempat validator. Selengkapnya</summary>
+            <p>DvP memakai Atomic Private Settlement: validator hanya menyimpan commitment dan bukti STARK, BI membuka kapsul audit. Transfer RD/DFABI biasa tetap di lane 1: Torii hanya membatasi akun yang boleh membaca, itu kontrol akses, bukan kerahasiaan.</p>
           </details>
         )}
         <p className="vh" aria-live="polite">Menampilkan data sebagai {party}</p>
