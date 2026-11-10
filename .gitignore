@@ -11,3 +11,9 @@ alibaba.yaml
 
 # ICMA BDT v1.2 source PDF: licensed copy, never commit
 besu/docs/icma-bdt-v1.2/
+
+# Project repos split out 2026-11-10; each folder is its own git repo (like iroha3/)
+/besu/
+/fabric-x/
+/frontend/
+/iroha3/
