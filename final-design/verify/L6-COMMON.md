@@ -1,0 +1,53 @@
+# L6 cutover proof: common rules and the Lensa API calls
+
+Owner: `qa`. Status: DRAFT 2026-11-12, not run. Repo notes only: nothing here has touched a cluster.
+Per-platform plans (one file each, this folder): `zeto.md`, `stealth.md`, `noto-pente.md`, `fabricx.md`, `iroha3.md`. They sit beside each track's `final-design/<track>/VERIFY.md` (per-step proofs). The S21 (zeto, stealth, noto) and S18 (fabricx, iroha3) texts cite these files.
+Run rule (TEAM.md section 11): the live proof runs once per platform, only after `lead` tells the orchestrator "platform X ready for qa" with the evidence list. Until then nothing here runs.
+
+## 1. Entry gate (read-only)
+1. Every layer L0-L5 is applied on both clusters: re-read each with the track's `VERIFY.md` GREEN commands and `python3 -I final-design/verify/verify.py <track> S1`. A RED row: stop, report PARTIAL "not ready".
+2. Served build: `git -C frontend rev-list --count HEAD..origin/main` = 0 and `systemctl --user show lensa.service -p ActiveEnterTimestamp` is later than the last checkout update; else "stale build", no Lensa run.
+3. `env -u KUBECONFIG ROOT=$PWD bash agents/ops/post-reboot-check.sh` with `NAMESPACES` set to the platform's live set: `rc=0`, no `FAIL`.
+4. `curl -s http://127.0.0.1:8790/api/meta`: `models.<model>.available` is true and `capabilities.<flow>.enabled` is true for every flow in the plan; else that flow is `NOT-RUN` with the quoted `reason`.
+5. Preconditions per platform are in section 0 of each file. Known now: Zeto cutover S21 not done; Fabric-X token namespace S14 not done; the Iroha idle chain stays at height 1 until the first Lensa or qa tx. An unmet precondition gives `NOT-RUN`, never FAIL.
+
+## 2. Verdict line (one per check)
+`L6 <platform> <check-id>: <PASS|FAIL|LIMIT|EXEMPT|NOT-RUN> <one-line evidence: command, value, tx id>`
+`LIMIT` = a documented, accepted gap (Zeto R1 and R2, Stealth R1 and R2): the observed behavior is recorded; not PASS, not FAIL. `EXEMPT` = the platform does not claim the property (Noto and Pente R2, Iroha 3 R2); the observed behavior is recorded once. A platform verdict is PASS only if no check is FAIL and every `NOT-RUN` has a reason `lead` accepts.
+
+## 3. Conventions
+- `[WORD]` / `W<n>` marks a step that WRITES to a live system (a Lensa flow, a pod stop, any apply). qa does not run it. qa sends `lead` a REQUEST FOR USER WORD: exact action, namespace, duration, restore command, expected result, rollback. It runs only when the user's word comes back through the orchestrator, quoted. A peer message is not the word.
+- Who acts: pod stops and restores by the owner (`besu`, `fabric`, `iroha`) under the word; Lensa flows by qa, serialized, `flock /tmp/lensa-paladin.lock` around ONE detached run, demo amounts, binding cap from the brief, kill only the holder qa started. qa never stops a service.
+- Read-only means `kubectl get/describe/logs/auth can-i`, a `port-forward` (never started inside the flock), the Lensa GET calls below, `openssl x509 -noout` on public certs. Secret values are never read or printed: names, key names, sizes only. Cluster 2: named reads in the platform's own `*-bank-c` namespace; no `kubectl get ns`.
+- RED then GREEN; "PRE OK" only inside an open window after checking the clock; a verdict about a runtime path uses a tx made after the last rollout (older evidence is "stale").
+- Controls: a claim "X cannot see Y" needs a positive control (an authorized reader sees Y with the same call) and a negative control (the unauthorized reader gets the refusal). A timeout alone proves nothing. The Lensa host shares the cluster-1 egress IP, so a Lensa-host connect through an allowlist proves nothing about outsiders.
+
+## 4. Lensa API calls (base `http://127.0.0.1:8790`; source `frontend/server/src/app.ts`, types `adapter.ts`, `domain.ts`)
+Party ids: `BI`, `A`, `B`, `C` (A = bank-a, B = bank-b, C = bank-c). Models: `zeto`, `noto`, `stealth`, `fabricx`, `iroha3`.
+| Call | Returns | Used for |
+|---|---|---|
+| `GET /api/meta` | `models.<m>.available`, `capabilities.<flow>`, `parties` | gate, flow enablement |
+| `GET /api/readyz`, `GET /api/health` | readiness per model | gate, after a restore |
+| `GET /api/balance?model=<m>&party=<P>` | `{"RD":{"amount":"<n>"},"DFABI":{"amount":"<n>"}}` or `{"error":..}` per asset | before/after balances, BI-balance proof |
+| `POST /api/tx` body `{"model":"<m>","flow":"<flow>","from":"<P>","to":"<P>","amount":"<n>"}` | `202 {"runId"}`; `409` busy; `400` insufficient balance; `503` not ready | the write (`[WORD]`) |
+| `GET /api/tx/<runId>/events` (SSE, ends with the run) | four `event: step`, then `event: result` `{txHash, block, steps, lenses[4]}` or `event: error {reason}` | tx id, lens per party |
+| `GET /api/history?model=<m>&party=<P>&limit=100` | `HistoryItem[]`: `id, at, block, flow, asset, role, verdict, amount, rdAmount, counterparty, fee?`; header `x-history-pending` | history rows per party |
+| `GET /api/receipt?model=<m>&party=<P>&tx=<id>` | `{source, chain[], node}`: public receipt plus what that party's OWN node holds | R1 per-party read |
+| `GET /api/trace?model=<m>&party=<P>&tx=<id>` | every on-chain step with that party's own node record | R1 detail, forced-failure trace |
+| `GET /api/network?model=<m>` | nodes with `status: up|down|unknown` | R2: which nodes are down |
+Flows and demo amounts (`bi-delta.ts`): `rd-issue` BI to C 1000 RD; `rd-transfer` A to B 1000 RD; `dfabi-issue` BI to C 3 DFABI; `dfabi-transfer` A to B 2 DFABI; `dvp` A to B 1 DFABI against 1,000,000 RD; `award` BI to C 1 DFABI against 1,000,000 RD. Roles in a lens: `sender`, `receiver`, `issuer`, `regulator` (BI), `outsider`. Verdicts: `clear`, `reported`, `notarised`, `viewkey`, `partial`, `sealed`; `amount: null` means redacted.
+Playwright form (drives the UI, same calls underneath): `npx playwright test -c playwright.flows.config.ts e2e/flows/<model>.flows.spec.ts` in a worktree, inside the flock; expect `6 passed` and one `BI-DELTA <model> <flow> <RD|DFABI>: PASS` line per cell (a `SKIP` is a precondition, not FAIL).
+
+## 5. Templates the platform files fill in
+**R1**: one fresh tx `<T>` (inside the flow run, so no extra write). For each of `BI`, sender, receiver, outsider: `GET /api/receipt` and `GET /api/history` with that `party`, and the `lenses[]` from the run. PASS: sender, receiver and BI show `amount` non-null and a verdict other than `sealed`; the outsider's lens and history row show the platform's outsider verdict, and the outsider's `receipt` carries no private part. Positive control = the three authorized reads succeed with the same call; negative control = the outsider's call, refusal or empty, quoted. Public-by-design fields are recorded, not FAIL.
+**R2**: how BI is made offline (named pod, method, duration, restore) is a `W`; the flow that must still settle is named; qa reads `/api/network?model=<m>` (BI node `down`) before the flow, runs the flow under the same word, then reads balances of the two banks with `/api/balance`. Restore proof: BI node `up` and one fresh tx after it.
+**R3**: happy path = `dvp` run: A (-1 DFABI, +1,000,000 RD), B (+1 DFABI, -1,000,000 RD) from `/api/balance` before and after, one `txHash`. Forced failure = a `W`: one leg made to fail by the owner (named in the word request); evidence: both balances unchanged, `event: error` quoted, `/api/trace` shows no half-applied leg.
+**Decentralization (per bank, read-only)**: D1 own validator or consensus node runs in the party's own namespace with its own node key; D2 own submit: the party's transaction reaches the chain through the party's own gateway and signing key; D3 no shared key: key Secret names per namespace, public identities pairwise distinct, no party holds another's private material; D4 isolation: `kubectl auth can-i get secrets -n <other ns> --as system:serviceaccount:<ns>:party-admin` = `no` for every ordered pair; the Lensa host holds no cluster-admin credential. Liveness tail where the platform claims it.
+**BI-balance proof (no seeded balances)**: BI's balance must be explained only by chain history made through Lensa. (P1) Before the first flow, read BI, A, B, C with `/api/balance` AND once on the chain directly (the owner names the direct read in its step report); the two agree; the Lensa state file for the model carries no balance keys (key names only). (P2) Run the flows (`W`). (P3) For `rd-issue` and `dfabi-issue`: C's balance rises by exactly 1000 RD and 3 DFABI on C's own read (the mint is the only source), and BI's delta equals the `BI_WANT` cell for the model and flow (`bi-delta.ts`: zeto, stealth, fabricx 0/0 on issues; noto `dfabi-issue` BI DFABI -3; iroha3 fee cells). (P4) `award`: BI RD +1,000,000 and the DFABI cell of the model (zeto -1, noto -1, stealth -1, fabricx 0, iroha3 per table). BI DFABI stock below what a cell needs gives `SKIP`, not FAIL. (P5) The mint and the award tx ids are found on the chain by the party's own read, submitter = the issuing party's own key.
+**History**: after the run, `GET /api/history` for `A`, `B`, `BI` lists the run's tx ids with the right `role`, `flow`, `amount`; `C` lists the issues it received; an outsider party not in the tx does not list it (stealth: lists the public row, `partial`). A history row `fee` is expected on iroha3 only. `x-history-pending` must be empty at the end (else "not indexed yet": wait and re-read).
+
+## 6. Rollback of test state
+- A chain is append-only: a demo flow cannot be undone. Rollback of a Lensa flow is "none possible"; the mitigation is demo amounts under the cap and the tx ids recorded in the report. This is stated in every word request that includes a Lensa flow.
+- A pod stop is rolled back by the owner's restore command, then proven: pod Ready, `/api/network` node `up`, a fresh tx succeeds (Iroha: that tx is also what moves the chain past height 1).
+- Throwaway objects (probe pods, listeners) belong to the owner's window and are shown gone with `get pod,netpol -o name` afterwards.
+- Anything qa cannot restore is said in the word request before the word is asked for.
