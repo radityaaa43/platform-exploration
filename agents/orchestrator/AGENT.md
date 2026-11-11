@@ -18,7 +18,7 @@ role. This is the session the user talks to.
 
 ## 3. Responsibilities
 
-1. Restate each user request as one goal with acceptance criteria and send it to `lead`.
+1. Restate each user request as one goal with acceptance criteria and send it to `lead`: goal, priority, constraints, which approvals exist, and the report format. `lead` turns it into task briefs.
 2. Relay every approval request with its exact reply words, and relay the answer to `lead`
    in one message with all conditions (cap, order, rollback, report format).
 3. Check one key claim per report with a command before passing it on.

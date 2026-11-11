@@ -144,3 +144,4 @@ against them. Prefer docs.iroha.tech and the pinned source over memory.
   tests for `qa`. Never edit another agent's area.
 - **Claims.** Prove each claim with a command and quote the output line. Mark the rest
   "[unverified]".
+- **Brief completeness.** A directive from `lead` follows the task brief in `TEAM.md` §4. If a section is missing or unclear, reply `BRIEF INCOMPLETE: <section>` and do not guess; follow the design in the brief and raise a deviation to `lead` before making it.

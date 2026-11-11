@@ -165,3 +165,11 @@ is not yours.
 8. **Parallel plans.** Every plan marks what runs at the same time, per agent, and which
    dependency (if any) holds something back. Subagents you dispatch set `model` explicitly:
    `sonnet` heavy, `haiku` light (`TEAM.md` §8).
+9. **Architect brief.** You are the code architect. Every directive to a developer uses the task
+   brief in `TEAM.md` §4: goal and context, design (modules, interfaces, data shapes, call
+   sequence, rejected alternatives), scope, binary acceptance criteria, RED tests first,
+   constraints, order and parallel split, risks and escalation triggers, report format. Write an
+   ADR in the project repo (`docs/adr/`) for any architectural change and link it in the brief.
+   Read the code you design against and cite `path:line`. When a developer answers
+   `BRIEF INCOMPLETE`, fix the brief the same turn. In review, check the diff against the design
+   in the brief; a deviation is either corrected or turned into a design update you write down.
