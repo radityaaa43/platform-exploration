@@ -100,6 +100,7 @@ Shared with zeto (referenced by zeto S id, not repeated): validators and chain d
 - Sources: `besu@9890701:stealth-address/ts/stealth.ts:58-80`, `ts/chain.ts:46-49`, `docs/architecture-brief.md:119-123` (key table), `:461`; `frontend@28c8bdb:server/src/adapters/stealth.ts:117-122,195-198,382-386,411`; Besu "Account management" (no `eth_sendTransaction`).
 
 ### S9: Bank signer + scanner per bank, key move A, B, C
+- USER DECISION 2026-11-12 ~02:20 CST ("rotasi stealth ya", README decision 12; analyst fix 13(c)): key ROTATION is a STEP of S9, not an option: each bank generates NEW spendKey, viewKey, identityKey inside its OWN namespace (no host file involved), re-registers its meta-address via ERC-6538 `registerKeys` from the new identity key, and sweeps its old stealth balances to addresses derived from the new keys; afterwards the keys copied from the Lensa host file are worthless. The S7 Secrets `stealth-keys` (copied keys) are TRANSITIONAL until the rotation of that bank. Every chain step (registerKeys per bank, each sweep) is a CLUSTER-OP on the live chain with its own user-word text: exact calls, signer and key, gas (price 0), effect on the old Lensa (its old keys lose meaning). Order unchanged: signers (S8/S9) and the S10 BI signer code exist before the S12 role move; the DvPFactory refund-tracking redeploy at the S15 trust reset stays user-only.
 - DELTA: 1, 2, 10 -> AFTER row: "Signer/scanner service holds this org's spending + viewing (+ identity) keys only"
 - Owner: besu  Size: L
 - Prerequisites: S5, S7, S8
@@ -112,6 +113,7 @@ Shared with zeto (referenced by zeto S id, not repeated): validators and chain d
 - Sources: `frontend@28c8bdb:server/src/adapters/stealth.ts:22-24,164,193` (key and pool shapes, `unusedOf`); ARCHITECTURE 2a row "Signer/scanner service"; CURRENT section 4.
 
 ### S10: BI signer + BI scanner in rd-stealth-bi
+- Analyst audit 2026-11-12: DELTA 3 (BI scanner holding per-bank view-key copies + the S11 registry-compare job) is UNBUILT and part of this plan; the BI signer code (role `bi`) does not exist yet and must exist before S12.
 - DELTA: 1, 3, 8 -> AFTER row: "BI scanner holds a copy of each bank's viewing key (not spend keys)"
 - Owner: besu  Size: M
 - Prerequisites: S4, S7, S8
