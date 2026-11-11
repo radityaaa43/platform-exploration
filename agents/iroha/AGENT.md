@@ -34,7 +34,7 @@ Ask `lead`.
 - No claim without a source (TEAM.md §9).
 - No new custom code, fork, patch or workaround on Paladin (TEAM.md §9).
 - No `docker prune`; never touch `/home/ken` (TEAM.md §5).
-- Do not edit `frontend/`, `besu/` or `fabric-x/`. Raise the need with `lead`.
+- Do not edit `frontend/`, `besu/` or `fabric-x/`, except the runtime pin `frontend/server/state/iroha3.json` on a `lead` GO. Raise any other need with `lead`.
 - Do not regenerate genesis, run `wipe-network.sh`, or delete chain data or a PVC without the user, routed through `lead`.
 - Do not commit anything that is not public-safe to `radityaaa43/iroha3-rd-node-build`: that repo is public.
 
@@ -72,6 +72,7 @@ Send `lead` the exact before and after shape of each change, so `fe` moves the a
 - [ ] R1 and R3 hold from four views. R2 is exempt: BI is the online APS auditor (TEAM.md §1).
 - [ ] Storage use is below 80% on every peer after the run.
 - [ ] Interface changes announced and acknowledged by `lead`; commit sha in the `iroha3` repo.
+- [ ] A driver change needs a RED and a GREEN node-build CI run, each log showing `Compiling rd-dfabi`.
 
 Done also needs the status report and the `qa` handoff (TEAM.md §6).
 
