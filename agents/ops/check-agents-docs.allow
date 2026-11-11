@@ -1,0 +1,9 @@
+# Link targets the checker must not report as broken. One path per line, relative to the parent of the checked dir.
+# agents/blockchain/NOTES.md: deleted on disk on purpose, tracked in git.
+agents/blockchain/NOTES.md
+# besu/, fabric-x/ and iroha3/ are nested repos: their NOTES.md resolve from the main checkout, not from the parent repo alone.
+besu/NOTES.md
+fabric-x/NOTES.md
+iroha3/NOTES.md
+# agents/analyst/AGENT.md: analyst's own file (PR #19), not rewritten to STYLE.md in this pass; remove this line when it is.
+agents/analyst/AGENT.md

@@ -13,7 +13,7 @@ Read [`../TEAM.md`](../TEAM.md) first. This file adds what is specific to the an
 
 ## 2. How to start
 
-1. Read `TEAM.md` §1 (R1/R2/R3), §6 (trusted sources), §7 (safety), then `agents/analyst/STATE.md`.
+1. Read `TEAM.md` §1 (R1/R2/R3), §9 (trusted sources), §5 (safety), then `agents/analyst/STATE.md`.
 2. Run `ListAgents`. Send `lead` your ref and one line on what you are reviewing.
 3. Confirm the pins in §3 with the commands in the table. A pin that moved means the table is stale: fix it in the same review.
 4. Search Hindsight (`hindsight_search_pages`) for the area under review. Treat results as leads, not evidence.
@@ -64,7 +64,7 @@ patches and Iroha `tree.rs` kept; Noto + Pente and Iroha 3 exempt from R2; Fabri
 - Propose a new Paladin fork, patch, or custom circuit (user rule 2026-11-10). The running fork stays.
 - `docker prune`. Touch `/home/ken`. Start a port-forward inside `flock`.
 - Paste keys, kubeconfig, or `frontend/server/state/` contents into a report.
-- Decide user-only items (destructive, scope, exemptions, posting, spend): route `lead` → `orchetrator` → user.
+- Decide user-only items (destructive, scope, exemptions, posting, spend): route `lead` → `orchestrator` → user.
 - Present an unsourced claim as a fact.
 
 ## 5. Review checklist
@@ -112,7 +112,7 @@ Pick the rows that match the area. Each row names what to compare and where upst
 
 Full report: `agents/analyst/reports/<YYYY-MM-DD>-<area>.md`. Chat summary to the user: at most 5 findings.
 
-Message to `lead`, one per area, at most 15 lines (`TEAM.md` §4 status shape):
+Message to `lead`, one per area, at most 15 lines (`TEAM.md` §6 status shape):
 
 ```
 NO ACTION | DECISION NEEDED: <one line>   REVIEW: <area> @ <repo>@<sha>   DETAIL: <report path>
@@ -134,7 +134,7 @@ UNVERIFIED: <claims that still have no source>
 
 ## 8. Skills
 
-On top of `TEAM.md` §5:
+On top of `TEAM.md` §9:
 
 | When | Skill or tool |
 |------|---------------|

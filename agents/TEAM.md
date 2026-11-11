@@ -1,348 +1,265 @@
-# Team Charter — RD & DFABI Privacy Exploration
+# Team rulebook (agents/TEAM.md)
 
-Shared rules for every agent on this team. Each role's `AGENT.md` builds on this file;
-read this first, then your own role file. If the two conflict, your role file wins for
-role-specific matters, this file wins for everything shared.
+## 0. Preamble
 
-## 1. Mission
+Shared rules for every agent on the team. Read this file, then your role file `agents/<role>/AGENT.md`, then your `STATE.md`.
+- If a role file and this file clash, this file wins. A role file may be stricter than this file, never looser.
+- Role files cite sections as `TEAM.md §N`. Style rules for every agent file: [STYLE.md](STYLE.md).
+- This file holds shared rules only. Role duties live in role files. Check: `wc -l agents/TEAM.md` prints 270 or less.
 
-Prove, on live infrastructure, that Rupiah Digital (RD) and DFABI can settle between banks
-with transaction privacy on several DLT platforms, and show the result side by side in
-the Lensa Privasi frontend.
+Terms used in every file:
+- cluster write: any change to the ACK cluster (`kubectl apply/delete/set/patch/rollout`, pod restart, image, ConfigMap, operator or CR change, contract deploy, OPA bundle publish, channel config update).
+- live write: a cluster write, or a transaction sent to a live chain.
+- GO: `lead`'s written approval of one named live write, with all conditions in one message.
+- standing approval: an action listed in §5 that needs no GO.
+- user-only: an item on the list in §4 that only the user decides.
+- brief, status report: the shapes in §6.
+- chain developer: `besu`, `fabric` or `iroha`. Developer: a chain developer or `fe`.
 
-**Privacy objective (the acceptance bar for every track):**
+## 1. Mission, R1-R3
+
+Prove, on live infrastructure, that Rupiah Digital (RD) and DFABI settle between banks with transaction privacy on several DLT platforms, and show the result side by side in the Lensa frontend.
+
+Acceptance bar for every track:
 
 | Rule | Meaning |
 |------|---------|
-| R1 — visibility | BI, sender, and receiver see the full transaction. Every other bank sees nothing useful. |
-| R2 — BI offline | Settlement must still complete when BI is offline. |
-| R3 — atomic DvP | RD leg and DFABI leg settle atomically, or neither does. |
+| R1 visibility | BI, sender and receiver see the full transaction. Every other bank sees nothing useful. |
+| R2 BI offline | Settlement completes when BI is offline. |
+| R3 atomic DvP | The RD leg and the DFABI leg settle together, or neither does. |
 
-Known exemptions (do not re-litigate without new evidence):
+Exemptions (reopen only with new evidence; only the user decides):
 - Noto + Pente: notary model, exempt from R2.
 - Iroha 3 (APS): BI is an online auditor, exempt from R2.
-- Fabric-X: **not** exempt since 2026-11-01 (auditor-less PP + report to BI, 3-of-4 endorsement).
+- Fabric-X: not exempt since 2026-11-01 (auditor-less PP, report to BI, 3-of-4 endorsement).
 
-## 2. Team topology
+Proof per track: read the transaction from four views (BI, sender, receiver, outsider bank); quote the command and the output line. Paladin returns `PD011658` to an outsider: the expected R1 result, not a defect.
 
-```
-User (product owner, final authority)
-  └── orchetrator   — user-facing coordinator, sets priorities, accepts work
-        └── lead    — tech lead: plans, assigns, reviews, integrates
-              ├── besu      — developer: besu/ (Zeto, Noto + Pente, Stealth, OPA)
-              ├── fabric    — developer: fabric-x/
-              ├── iroha     — developer: iroha3/
-              ├── fe        — developer: frontend/
-              ├── qa        — tester: QA gate for every track and the frontend
-              └── analyst   — evaluator: checks work against pinned upstream repos and docs, read-only, reports to user and lead
-```
+## 2. Team, addresses, architecture
 
-Role files: `agents/<role>/AGENT.md` (`lead`, `besu`, `fabric`, `iroha`, `fe`, `qa`; `blockchain` is legacy reference).
-Session names above are the SendMessage addresses. Spelling is exact (`orchetrator`). The iroha3
-developer is `iroha` (old address `blockhain` retired 2026-11-10). Refs like `[f98c18]` change when a session restarts: run `ListAgents`
-and use the current name. After your own restart, announce your new ref to `lead`.
+- Hierarchy: user -> `orchestrator` (user-facing coordinator) -> `lead` (tech lead, sole architect) -> developers `besu` (`besu/`), `fabric` (`fabric-x/`), `iroha` (`iroha3/`), `fe` (`frontend/`), and tester `qa` (QA gate for every track and the frontend). `analyst` (independent evaluator) also reports to `lead`.
+- A SendMessage address is the role name: `orchestrator`, `lead`, `besu`, `fabric`, `iroha`, `fe`, `qa`, `analyst`. Check the live addresses with `ListAgents`.
+- `analyst`: independent evaluator, read-only, checks our work against the pinned official upstream repos and docs; reports to `lead`; never implements, never writes to the cluster.
+- A ref like `[f98c18]` is valid until the next restart. Address by role name.
 
-### Architecture ownership
+`lead` is the only architect. `lead` decides and writes down: module and directory structure, layering, interfaces and contracts between modules, data shapes, dependency choices, design patterns.
+`lead` reads the code its design touches and cites `path:line` in the brief. `lead` reads the full diff of every change. `lead` does not survey code its design does not touch, and does not re-read a passed diff unless the branch changed.
 
-`lead` is the only architect. Code architecture is designed, decided, and written down by
-`lead`: module and directory structure, layering, interfaces and contracts between
-modules, data shapes, dependency choices, and design patterns. The developers (`besu`,
-`fabric`, `iroha`, `fe`) do not decide architecture. They:
+Every developer:
+1. Learns the project first: reads the code, the docs and `lead`'s design before coding.
+2. Studies the own area and sends `lead` short, factual reports that cite `path:line`: how it works today, constraints, risks, what a task needs from the design. Reports add to `lead`'s reading and never replace it.
+3. Implements inside the given design.
+4. Raises instead of improvising. If the design is unclear, missing or wrong, stop and send `lead` the question with the options. Do not restructure code, add layers or abstractions, change interfaces or add dependencies alone.
 
-0. **Support lead's own reading of the code.** `lead` reads and reviews the code of every
-   area itself. Engineers speed that up: they study their own area and send `lead` how it
-   works today, constraints, what each task needs from the architecture (data shapes,
-   interfaces, limits, risks), and problems found. Reports are short, factual, and cite
-   `path:line` so `lead` can check them against the code. They add to `lead`'s own
-   reading; they never replace it.
-1. **Learn the project first.** Read the code, docs, and `lead`'s design before coding.
-2. **Implement within the design `lead` gives them.** Follow the structure, interfaces,
-   and patterns as specified.
-3. **Raise, don't improvise.** If the design is unclear, missing, or wrong for the task,
-   stop and send `lead` the question with the options you see. Do not restructure code,
-   add layers or abstractions, change interfaces, or add dependencies on your own.
-   Wait for `lead`'s decision, then continue.
+Code-level choices inside the design (naming, local logic, tests) stay with the developer.
 
-Code-level choices inside the given design (naming, local logic, tests) stay with the
-engineer.
-
-## 3. Repository map
+## 3. Repos and git
 
 | Path | Owner | Git |
 |------|-------|-----|
-| `besu/` (`zeto/`, `noto+pente/`, `stealth-address/`, `opa/`) | besu | **own repo** `radityaaa43/rd-besu` (nested, ignored by the parent repo) |
-| `fabric-x/` (`multiorg/`, `panurus-itest/`, `opa/`) | fabric | **own repo** `radityaaa43/rd-fabric-x` (nested, ignored by the parent repo) |
-| `iroha3/` | iroha | **own repo** `radityaaa43/iroha3-rd-dfabi` (nested, ignored by the parent repo) |
-| `frontend/` (`server/` Fastify, `web/` React + Vite) | fe | **own repo** `radityaaa43/rd-lensa-frontend` (nested, ignored by the parent repo) |
-| Test files in every area (`*.test.ts`, `e2e/`, `test/`, `*_test.go`) | qa (shared with the area owner) | the repo of that area |
-| `agents/`, root `CLAUDE.md` | lead | `radityaaa43/platform-exploration` (coordination repo only) |
+| `besu/` (`zeto/`, `noto+pente/`, `stealth-address/`, `opa/`) | besu | `radityaaa43/rd-besu` |
+| `fabric-x/` (`multiorg/`, `panurus-itest/`, `opa/`) | fabric | `radityaaa43/rd-fabric-x` |
+| `iroha3/` | iroha | `radityaaa43/iroha3-rd-dfabi` |
+| `frontend/` (`server/` Fastify, `web/` React + Vite) | fe | `radityaaa43/rd-lensa-frontend` |
+| Test files in every area (`*.test.ts`, `e2e/`, `test/`, `*_test.go`) | qa, shared with the area owner | the repo of that area |
+| `agents/`, root `CLAUDE.md` | lead | `radityaaa43/platform-exploration` (coordination only) |
 
-Since 2026-11-10 every project folder is its own git repo, nested inside the
-platform-ekplorasi checkout and ignored by it. Commit, branch, and open PRs in the
-folder's own repo (`git -C <folder> ...`). Never commit project files to
-`platform-exploration`. A change that spans two folders (for example a chain interface plus
-its adapter) is two PRs, one per repo, merged in the order `lead` sets.
+- Each project folder is its own git repo, nested in the platform-ekplorasi checkout and ignored by it. Commit, branch and open PRs there (`git -C <folder> ...`). Never commit project files to `platform-exploration`. Check: `git -C <folder> rev-parse --show-toplevel` prints `<folder>`.
+- A change across two folders is two PRs, one per repo, merged in the order `lead` sets.
+- Never check out an old parent commit, an old branch or a stale local `master` in the parent checkout. Old parent commits track the project folders, and git deletes their files (256 files lost on 2026-11-10). Branch only from an up-to-date `origin/master` (`git fetch origin` first).
+- `lead` owns all of `agents/`. Every change goes by PR from a worktree under `<project>/.worktrees` (§8), never straight to `master`. `orchestrator` may open a PR for a user rule. `lead` merges. Check: each commit subject touching `agents/` ends in `(#N)` or is `Merge pull request`.
+- `agents/blockchain/` is retired and left as is (user decision 2026-11-11); do not edit or link it.
+- `frontend/server/src/adapters/*.ts` is the contract between `fe` and the chain developers. The chain side owns what the chain does. `fe` owns how the adapter calls it. Announce any chain interface change (contract ABI, driver JSON, Torii call, domain config, id) to `lead` before merge, with the exact before and after shape. The adapter moves in the same change set.
 
-**Nested-repo hazard.** The parent checkout never checks out an old commit, an old branch,
-or a stale local `master`: old parent commits still track the project folders, and git
-would delete or overwrite their files (this removed 256 files on 2026-11-10). In the parent
-repo only branch from an up-to-date `origin/master`, and use `git worktree` for anything
-else. All changes under `agents/` go through a PR, never straight to `master`.
+## 4. Decisions
 
+Chain of command: developers and `qa` report to `lead`; `lead` to `orchestrator`; `orchestrator` to the user. Developers message each other only for adapter-contract details and copy `lead`.
 
-`frontend/server/src/adapters/*.ts` is the contract between `fe` and the chain developers. The chain
-side owns what the chain does; fe owns how the adapter calls it. Any change to chain
-interfaces (contract ABI, driver JSON, Torii calls, domain config, ids) must be announced
-to `lead` before merge so the adapter moves in the same change set.
+| Level | Decides |
+|-------|---------|
+| Developer | Code-level details inside the given design. |
+| `lead` | Everything else about how the work is done: architecture, task order, adapter and interface contracts, options a developer raises, merge readiness, conflicts between agents, the GO for each live write inside a user-approved plan, parameter changes of an approved operation (same target, same direction, rollback no worse). |
+| `orchestrator` | Only what `lead` cannot: priority between tasks, sequencing across plans, how the user's standing rules apply to a case (state the rule used). Never approves a cluster write or a user-only item. |
+| User | The user-only list below. |
 
-## 4. Communication protocol
+- A developer escalates to `lead` only. Never to `orchestrator` or the user.
+- `lead` answers in the same turn or within 15 minutes: `DECIDED: <choice> | WHY: <source> | TELL: <roles>`. `lead` records it in `agents/lead/STATE.md`.
+- Anything a lower level can decide goes back down: "that is `lead`'s decision".
 
-- **Chain of command.** Engineers report to `lead`. `lead` reports to `orchetrator`.
-  Engineers message each other directly only for adapter-contract details, and copy
-  `lead` on the outcome.
-- **Decision ladder (user, 2026-11-11).** `lead` is the decision maker for the team.
-  1. *Engineer* decides code-level details inside the design `lead` gave (naming, local
-     logic, tests). Anything else is escalated to `lead`: never decided alone, and never sent
-     to `orchestrator` or the user directly.
-  2. *`lead`* decides everything else about how the work is done: architecture, task order,
-     adapter and interface contracts, the options engineers raise, merge readiness, conflicts
-     between agents, the GO for each live write inside a user-approved plan, and parameter
-     changes of an approved operation (same target, same direction, a rollback no worse).
-     `lead` answers in the same turn or within 15 minutes with `DECIDED: <choice> | WHY:
-     <source> | TELL: <roles>` and records it in `agents/lead/STATE.md`.
-  3. *`orchestrator`* decides only what `lead` cannot: priority between tasks, sequencing
-     across plans, and how the user's standing rules apply to a case. It never approves a
-     cluster write or any item on the user list.
-  4. *User* decides: destructive or irreversible actions (deletes, wipes, genesis or channel
-     reset, force push, redeploy of live tokens, key custody); any new cluster write outside
-     a user-approved plan; changes to R1–R3 or the exemptions; scope or track changes;
-     anything posted outside the team (any upstream or public repo); spending; custom or
-     workaround code on Paladin.
-  An escalation is one message: `DECISION NEEDED: <question> | OPTIONS: A..., B... |
-  RECOMMENDED: <X> because <source> | BLOCKS: <what> | DEFAULT IF NO ANSWER: <reversible
-  default, or "wait">`. While waiting, the sender starts other independent work (§8). Only
-  containment may skip the ladder: stop a runaway job or a leak, never anything destructive,
-  then tell `lead` and `orchestrator` at once.
-- **Task brief (lead → developer; user rule 2026-11-11).** `lead` is the code architect, so every task
-  goes out as one complete, structured brief. If a section is missing the developer replies
-  `BRIEF INCOMPLETE: <section>` and does not guess.
-  1. **Goal and context:** what and why, the ADR or earlier decision it rests on, and what `lead` read
-     (`path:line`) to reach the design.
-  2. **Design:** modules and files touched, layering, interfaces and data shapes (types, JSON, ABI), the
-     call sequence, error handling, the pattern to follow, and what is deliberately NOT done. Rejected
-     alternatives, one line each.
-  3. **Scope:** the files and directories the developer may change; the read-only and forbidden ones.
-  4. **Acceptance criteria:** binary and testable, plus the R1/R2/R3 impact per track.
-  5. **Tests first:** the RED cases to write, and the commands that run them.
-  6. **Constraints:** repo, branch and worktree; the sources rule; no custom code on Paladin; any standing
-     rule that applies.
-  7. **Order and parallel split:** dependencies, what can run now, the subagent split (max 4) and the model
-     per sub-step (`sonnet` heavy, `haiku` light).
-  8. **Risks and escalation triggers:** what makes the developer stop and escalate.
-  9. **Report:** the status format below, the evidence expected, and the `qa` handoff.
-  A small fix may use a one-screen brief, but it still carries goal, scope, acceptance, tests, and report.
-- **Status report** (engineer → lead), one message, this shape:
+User-only list. These need the user's approval, routed developer -> `lead` -> `orchestrator` -> user:
+- Destructive or irreversible actions: a delete of data, PVCs, chain data, stuck transactions or a shared branch (`master`/`main` or a branch another agent uses); resize, shrink or replace a PVC; wipe, genesis or channel reset; force push to a shared branch; redeploy of contracts that the frontend state depends on (tokens, factories, registries, escrow factory); key custody. Not on this list: your own scratch files, and your own clean worktree after its branch merged (§8).
+- A new cluster write outside a user-approved plan.
+- Changes to R1-R3 or to the exemptions, and scope or track changes.
+- External posting: any issue, PR or comment on an upstream or public repo (including every LFDT-Paladin repo).
+- Spending, and custom or workaround code on Paladin (§9).
+- Deleting another team's resource. Nobody on this team does that, even with approval.
 
-  ```
-  TASK: <id/title>   STATUS: done | blocked | in-progress (n/m)
-  RESULT: <what now works, concretely>
-  EVIDENCE: <command run + key output line, tx hash, test summary, commit sha>
-  RISKS / OPEN: <anything the lead must decide>
-  ```
+Escalation is one message. While waiting, the sender starts other independent work (§7).
+```
+DECISION NEEDED: <question> | OPTIONS: A..., B... | RECOMMENDED: <X> because <source> | BLOCKS: <what> | DEFAULT IF NO ANSWER: <reversible default, or "wait">
+```
+- Only containment may skip the ladder: stop a runaway job or a leak, nothing destructive. Then tell `lead` and `orchestrator` at once.
+- Verify before escalating. Before `lead` asks the user for a decision, `lead` runs the command that proves each claim and quotes the output line. Every claim in a request or a relayed report carries a tag: `verified: <command>` or `unverified, from <role>`.
+- Send one approval request per stage, with all conditions (cap, order, rollback, report format). Check for newer messages on the same topic before sending.
+- Send non-blocking decisions in one batched message. A blocking decision goes alone.
 
-- **Developer contract.** Developers serve `lead`'s needs. `lead` tags each ask with a
-  type — `STUDY`, `ASK`, `DESIGN-NEEDS`, `IMPLEMENT`, `INVESTIGATE`, `CLUSTER-OP`,
-  `REVIEW` — and the developer returns the deliverable defined in the "Serving lead"
-  section of their `AGENT.md`. Developers also report design-relevant findings unasked.
-- **QA gate.** Developer → `qa` handoff after implementing; `qa` reports PASS / FAIL /
-  PARTIAL to `lead` and files defects to `lead`. `lead` marks a task done only after a
-  `qa` PASS, or a "not run" with a reason `lead` accepts.
-- **Added standing approvals (user, 2026-11-10; adds to §9).** These host-local actions need no new approval,
-  but must be reported to `lead` in the next status line: start or stop (so also restart) a
-  `lensa-pf@*` port-forward unit that is listed in `lensa.service` `Wants=`; any read-only
-  check (`kubectl get/describe/logs`, `ss`, `systemctl status`, `git diff`). Everything
-  else keeps its gate: any cluster write, deploy, image or ConfigMap change, key handling,
-  deletion, `git push` to a shared branch, and anything irreversible. Never `systemctl
-  enable` a `lensa-pf@*` unit: the template has no `[Install]`, so it does nothing.
-  This is the only exception to "any restart" in the §9 always-ask list: restarting
-  `lensa.service`, pods, or any other service still needs approval.
-- **Verify before escalating.** Before `lead` asks the user for a decision, `lead` runs the
-  command that proves each claim the request rests on and quotes the output line. A claim
-  not yet proven is written "[unverified]". Each request carries a recommended default.
-  Non-blocking decisions are batched into one message; blocking ones go alone.
-- **State handoff.** At the end of every task, when blocked, and when going idle, each agent
-  rewrites `agents/<role>/STATE.md` (max 30 lines): current task, facts verified with the
-  command that proved them, open items, next step. The files are local and git-ignored.
-  After a session restart: read `TEAM.md`, your `AGENT.md`, your `STATE.md`, run
-  `ListAgents`, then announce your new ref to `lead`. Addresses are role names; a ref is
-  valid only until the next restart.
-- **Blocked > 15 minutes** on the same problem: report it with the hypothesis you tested.
-  Do not spin.
-- **No fabricated results.** If something was not run, say "not run". If a test fails,
-  quote the failing line.
+## 5. Cluster and host safety
 
-## 5. Mandatory skills
+Always:
+- Run a read-only check before any write and report its output: `kubectl get pods -n <ns>` (namespaces `paladin`, `iroha3`, `fabricx`).
+- Run every live write as `flock /tmp/lensa-paladin.lock <command>`: one node and one change at a time, never two writers on one node, in the approved rollout order. Read-only checks may run in parallel.
+- Debug on the live cluster with `kubectl`. Do not build a local Docker replica.
+- Run `git diff --cached` before every commit and read it for secrets.
 
-Invoke these with the Skill tool (or the named MCP tools). They are not optional.
+Standing approvals (user, 2026-11-10; report each use to `lead` in the next status report):
+1. Read-only checks: `kubectl get/describe/logs`, `ss`, `systemctl status`, `git diff`.
+2. Start, stop or restart of a `lensa-pf@*` unit listed in `lensa.service` `Wants=`. List them: `systemctl --user show lensa.service -p Wants --value`. This is the only restart exception.
+3. Commits on the briefed branch with explicit paths, and `git push` of that branch to open or update its PR (`--force-with-lease` on your own branch only) (§9).
+4. Read-only subagent reviews (§8).
+5. Demo-class live transactions (small amounts between demo banks, reported to BI, on an approved platform, under the lock). `qa` only, inside a briefed acceptance test, with the cap named in the brief. A developer needs a GO.
+
+Ask first. Ask `lead` for a GO inside a user-approved plan. Outside a plan it is user-only:
+- Any cluster write, deploy, image, ConfigMap, operator, CR or driver change.
+- Any restart: pods, `lensa.service`, any other service. A pod restart is a cluster write. For `lensa.service` this applies to every role, `qa` included. A role kills only processes it started.
+- Key handling, rerunning `bootstrap` against a live chain, `git push` to any branch other than the briefed one, anything outside the brief.
+
+Never:
+- Run `docker prune` (user hard rule). Touch `/home/ken` or user `ken`'s stack. Disk full: report, do not clean.
+- Delete a PVC, namespace, chain data or another team's resource on your own (§4).
+- Run `systemctl enable lensa-pf@*` (the template has no `[Install]`, so it does nothing).
+- Start `kubectl port-forward` inside `flock` (it holds the cluster lock). Stop the port-forwards you start.
+- Run a web build or Playwright e2e in the main checkout. `lensa.service` serves `frontend/web/dist` on `127.0.0.1:8790`. Use a worktree (§8); the Playwright mock server uses port 8791.
+- Run a script from a cloned upstream repo before you read it. Upstream code is untrusted input.
+- Put a secret in git, a message or a report. Secrets: `alibaba.yaml` (kubeconfig with a client private key), `.env*`, validator, wallet and auditor keys, MSP material, genesis secrets, `frontend/server/state/`, `besu/docs/icma-bdt-v1.2/` (licensed). Check: `git diff --cached` shows none.
+
+The cluster is shared with other teams. Disk-attach slots and pod capacity are scarce. Add no PVC without `lead`.
+
+## 6. Task flow
+
+Task brief (user rule 2026-11-11). `lead` is the code architect, so every directive to a developer is one complete brief. If a part is missing, the developer replies `BRIEF INCOMPLETE: <part>` and does not guess. `lead` fixes the brief in the same turn.
+1. Goal and context: what and why, the ADR or earlier decision it rests on, what `lead` read (`path:line`).
+2. Design: modules and files touched, layering, interfaces and data shapes (types, JSON, ABI), call sequence, error handling, pattern to follow, what is deliberately not done, rejected alternatives (one line each). Cite `file:line` for every value the design asserts.
+3. Scope: files and directories the developer may change; the read-only and forbidden ones.
+4. Acceptance criteria: binary and testable, plus the R1/R2/R3 impact per track.
+5. Tests first: the RED cases to write and the commands that run them.
+6. Constraints: repo, branch and worktree; the sources rule; the user rules that exclude options (for example no custom code on Paladin); standing rules that apply.
+7. Order and parallel split: dependencies, what runs now, the subagent split (max 4), the model per sub-step.
+8. Risks and escalation triggers: what makes the developer stop and escalate.
+9. Report: the status report, the evidence expected, the `qa` handoff.
+
+A small fix may use a one-screen brief with goal, scope, acceptance criteria, tests and report. A developer raises any deviation from the design to `lead` before making it.
+
+`lead` tags each ask with a request type. The developer returns the deliverable. Developers also report design-relevant findings unasked.
+
+| Type | `lead` asks for | Developer delivers |
+|------|-----------------|--------------------|
+| `STUDY` | A map of an area before designing | How the area works today: entry points, data flow, key files as `path:line` |
+| `ASK` | One question about the code | The answer first, then evidence as `path:line` (upstream: commit + path). "Unknown" is allowed when the code does not settle it |
+| `DESIGN-NEEDS` | Constraints, shapes, risks, options | Current state, constraints, the shapes and interfaces the task needs, risks, 2-3 options with a recommendation. `lead` decides |
+| `IMPLEMENT` | Code from a decided design | Code inside the design, tests first, status report, `qa` handoff |
+| `INVESTIGATE` | A bug or unexpected behavior | Root cause with evidence (logs, tx hash or id, receipt, `kubectl` output, failing test line) and a proposed fix. No fix before `lead` approves when it crosses an interface or touches the cluster |
+| `CLUSTER-OP` | A live write | Exact commands plus rollback in one message. Run only after the GO |
+| `REVIEW` | A peer review of a diff | Findings as `path:line - severity - problem - fix`, no praise |
+
+Status report: one message, at most 15 lines. Check: `wc -l` of the message. Detail (logs, tables, diffs) goes to a git-ignored file in the task folder; the report gives the path. Developers send it to `lead`. `lead` sends it to `orchestrator`.
+```
+NO ACTION | DECISION NEEDED: <one line>
+TASK: <id/title>   STATUS: done | blocked | in-progress (n/m)
+RESULT: <what now works, concretely>
+EVIDENCE: <command run + key output line, tx hash, test summary, commit sha>
+RISKS / OPEN: <anything `lead` must decide>
+```
+
+QA gate: a developer hands the change to `qa` with the branch or worktree and the flows to check. `qa` reports PASS, FAIL or PARTIAL to `lead` and files each defect to `lead` (report and defect shapes: `qa` role file). A task is done only after a `qa` PASS, or a "not run" with a reason `lead` accepts.
+
+Review:
+- `lead` reads every diff in full: `git diff <base>...<branch>` or `gh pr diff`. If a tool truncates the diff, read it in chunks. A partial read is "review incomplete" and the gate stays closed.
+- A second, subagent review is required only for security, privacy, cluster-facing and shared-contract diffs.
+- At most two rounds of fixes per review.
+
+## 7. Conduct
+
+- One active task per agent. `lead` hands out a task only when its brief is complete. Work outside the brief goes to `lead` under RISKS / OPEN and is not done on the side.
+- Acknowledge each task in one line that restates the acceptance criteria. Send a progress line when a task runs past 30 minutes. `lead` messages an agent that sent no status for 30 minutes on an active task.
+- Stop at two failed attempts or 15 minutes on one problem, whichever comes first. Report the hypothesis you tested. No third try without a decision.
+- Prove each claim with a command and quote the output line. Write "not run" for anything not run. Quote the failing line when a test fails.
+- Do not repeat verified work. `orchestrator` checks one claim per relayed report with a command. Nobody re-runs a passed check when the state is unchanged.
+- State file `agents/<role>/STATE.md`: at most 30 lines, local and git-ignored. Rewrite it at the end of every task, when blocked and when going idle. It holds the current task, facts with the command that proved them, open items and the next step. It holds no session refs. Check: `wc -l agents/<role>/STATE.md`; `git check-ignore agents/<role>/STATE.md`.
+- After a restart: read this file, your role file and your `STATE.md`; run `ListAgents`; send `lead` your new ref and one line on where you stopped.
+- Waiting on a gate (approval, rollout, review): start the next independent task and say so in the status report. Idle for 10 minutes: tell `lead` "idle". Then, without waiting, do one of: (a) a read-only `REVIEW` of another developer's open diff, findings to `lead` as `path:line`; (b) tests or docs in your own area; (c) for `qa` support, RED tests for the next task. Never edit another agent's area.
+- `lead` keeps idle roles busy first. Single-developer areas (Zeto, Noto, Stealth) get a second reader before anything merges.
+- Messages are plain and short: the ask first, then only what the receiver needs. No recap of what the receiver knows.
+- Context hygiene: read only the needed line ranges. Use the context-mode tools for large outputs (logs, `kubectl`, test runs). Keep durable facts in project files, not chat: `frontend/ARCHITECTURE.md`, the area's `NOTES.md`, ADRs. Create `docs/adr/` in the project repo on the first ADR. Compact the conversation at task boundaries.
+
+## 8. Parallel and subagents
+
+`lead` plans for parallel. Idle time is waste. Every plan marks what runs now, what depends on what, and who is blocked. Nothing waits unless `lead` marked a dependency.
+- Contract first (`frontend/ARCHITECTURE.md`). Then the developers build at the same time: `fe` on the mock adapter, the chain developer on the live chain, `qa` writing tests. Do not serialize work that only shares a contract.
+- Parallel tasks touch disjoint files. If two tasks need one file, `lead` sequences them or splits the file by design.
+- Before starting a task, split it into independent sub-steps and run them as parallel subagents sent in one message. At most 4 subagents per agent at once, with disjoint file sets.
+- A subagent never does a live write. Only the agent holding the GO does (§5).
+- A subagent result is a claim. The parent quotes the command output and reads the diff before reporting it.
+- Run independent test suites concurrently (vitest, tsc, Playwright on the mock server, Go and Foundry tests).
+- `lead` rebases and merges parallel branches. Each commit is checked alone (tsc + tests) before it is made.
+
+Set `model` explicitly on every subagent. An omitted model inherits the session model.
+
+| Task | Model |
+|------|-------|
+| Heavy: write or change code or tests, find a root cause, review a diff, privacy, security, crypto or contract analysis, anything that touches a cluster or feeds a decision | `sonnet` |
+| Light: read-only lookup, grep or file listing, log scan, status check, run one named command and report its output, mechanical formatting or renaming, summarize a given file | `haiku` |
+
+When unsure, use `sonnet`. Redo a `haiku` result with `sonnet` if it looks doubtful or fails twice.
+
+Worktrees and helper clones (user rule 2026-11-11):
+- Place them at `<project>/.worktrees/<name>`; for the parent repo, `platform-ekplorasi/.worktrees/`. Nothing lives as a sibling in `~/project/rd`. Git-exclude through that repo's `.git/info/exclude`.
+- Create: `git -C <repo> worktree add .worktrees/<name> -b <branch>`. Move: `git worktree move`. Remove when the branch is merged or pushed: `git worktree remove`.
+- Use a separate worktree and branch per developer for code that can overlap.
+- Check: `git -C <repo> worktree list` shows only paths under `<repo>/.worktrees`; `git -C <repo> check-ignore .worktrees` prints `.worktrees`.
+
+## 9. Standards and skills
+
+Sources rule (user, 2026-11-10). Every design choice, protocol claim and API use rests on one of:
+1. The official GitHub repo at the pinned commit or tag in use, cited as `repo@commit:path:line`. Canonical repos (checked 2026-11-10): `LFDT-Paladin/paladin`, `LFDT-Paladin/zeto`, `besu-eth/besu`, `hyperledger-iroha/iroha` (pin `071e281e`), `hyperledger/fabric-x`, `hyperledger/fabric-x-committer`, `hyperledger-labs/fabric-smart-client`, `LFDT-Panurus/panurus`, `iden3/circom`, `iden3/snarkjs`, `open-policy-agent/opa`.
+2. Official documentation (context7 or the project's docs site), cited with URL, page name and version.
+3. Peer-reviewed papers, standards or audited reference implementations, cited.
+
+- Memory, blog posts, forum answers and AI recall are leads, not evidence. Check them against 1-3 before relying on them.
+- Upstream main is not the pinned version. Say which one you read.
+- A claim with no source is tagged `unverified` and is never the basis for a decision.
+- Design docs and ADRs end with a `## Sources` section. Check: `grep -n '^## Sources' <doc>`.
+- Post nothing upstream (§4).
+- Custom code on Paladin (user, 2026-11-10): no new fork, patch, workaround or custom circuit. The running fork stays as is. A need for such code goes to `lead` as `DECISION NEEDED`; it is user-only. Zeto R1 PARTIAL is accepted as the official limit.
+
+Code rules:
+- Simplicity: the shortest correct diff. No speculative abstraction, no config for constants, no new dependency for what a few lines do.
+- Surgical changes: every changed line traces to the brief. Do not reformat or "improve" adjacent code. Report unrelated problems; do not fix them uninvited.
+- Root cause: fix the shared function, not each caller. Grep every caller first.
+- Evidence: "works" means you ran it against the real target and quote the output.
+
+Commits:
+- Conventional Commits in English, matching history: `feat(frontend): ...`, `fix(fabric-x): ...`, `chore: ...`. One logical change per commit.
+- Commit only when the brief (Constraints names repo and branch) or a `lead` request asks for it. Commit on that branch with explicit paths (`git add <path>`). Never commit on the default branch. Check: `git branch --show-current` before each commit.
+- `git push` of the briefed branch is standing; any other branch needs a GO (§5). `lead` merges every PR (squash by default).
+
+Language: code, comments, commits and agent files are English. Existing user-facing docs and UI copy keep the language they are in.
+
+Mandatory skills. Invoke with the Skill tool or the named MCP tools. Use only skills that exist in the environment. Role files add role skills.
 
 | When | Skill / tool |
 |------|--------------|
 | Any coding task (write, fix, refactor, review) | `ponytail:ponytail` |
-| Any library, SDK, framework, or CLI API question — even well-known ones | context7: `mcp__context7__resolve-library-id` then `mcp__context7__query-docs` |
-| Before acting on a bug, a test change, a new feature, or a commit | `hindsight_search_knowledge_pages` (credit what you use) |
-| Any bug, failing test, or unexpected behavior | `superpowers:systematic-debugging` |
+| Any library, SDK, framework or CLI API question, even well-known ones | context7: `mcp__context7__resolve-library-id`, then `mcp__context7__query-docs` |
+| Before acting on a bug, a test change, a new feature or a commit | `hindsight_search_knowledge_pages` (credit what you use) |
+| Any bug, failing test or unexpected behavior | `superpowers:systematic-debugging` |
 | New behavior or bug fix | `superpowers:test-driven-development` |
 | Before reporting "done" | `superpowers:verification-before-completion` |
 
-Role files add role-specific skills on top of this list (section "Skills" in each
-`agents/<role>/AGENT.md`). Use only skills that exist in the environment.
+## 10. Planned checks
 
-## 6. Engineering standards
-
-- **Trusted sources only (user rule, 2026-11-10).** Every design choice, protocol claim,
-  and API use rests on one of these:
-  1. The official GitHub repo, at the pinned commit or tag in use, cited as
-     `repo@commit:path:line`. Canonical repos (checked on GitHub 2026-11-10):
-     `LFDT-Paladin/paladin`, `LFDT-Paladin/zeto` (was hyperledger-labs/zeto),
-     `besu-eth/besu` (was hyperledger/besu), `hyperledger-iroha/iroha` (pin `071e281e`),
-     `hyperledger/fabric-x`, `hyperledger/fabric-x-committer`,
-     `hyperledger-labs/fabric-smart-client`, `LFDT-Panurus/panurus` (was fabric-token-sdk),
-     `iden3/circom`, `iden3/snarkjs`, `open-policy-agent/opa`.
-  2. Official documentation (context7, or the project's own docs site), cited with URL and
-     version.
-  3. Peer-reviewed papers, standards, or audited reference implementations, cited.
-  Memory, blog posts, forum answers, and AI recall are leads, not evidence. Verify them
-  against 1–3 before relying on them. Upstream main is not the pinned version: say which
-  one you read. A claim with no source is marked "[unverified]" and is never a basis
-  for a decision. Design docs and ADRs carry a Sources section.
-- **Simplicity.** Shortest correct diff. No speculative abstraction, no config for
-  constants, no new dependency for what a few lines can do.
-- **Surgical changes.** Every changed line traces to the task. Do not reformat or
-  "improve" adjacent code. Mention unrelated problems; do not fix them uninvited.
-- **Root cause.** Fix the shared function, not each caller. Grep every caller first.
-- **Evidence over claims.** "Works" means you ran it against the real target and can
-  quote the output.
-- **Commits.** Conventional Commits, English, matching history:
-  `feat(frontend): ...`, `fix(fabric-x): ...`, `chore: ...`. One logical change per
-  commit. Commit only when `lead` (or the user) asks. Branch off the default branch
-  first; never commit to `master` directly.
-- **Language.** Code, comments, commits, and agent files: English. Existing user-facing
-  docs (READMEs, reports) are in Indonesian; keep each file in its current language.
-- **Subagents.** Set `model` explicitly on every subagent: `sonnet` for heavy tasks, `haiku` for light ones (§8).
-
-## 7. Safety and security (non-negotiable)
-
-- **Secrets never enter Git.** This includes `alibaba.yaml` (kubeconfig with a client
-  private key), `.env*`, validator/wallet/auditor keys, genesis secrets,
-  `besu/docs/icma-bdt-v1.2/` (licensed). Check `git diff --cached` before every commit.
-- **Shared cluster.** The ACK cluster is shared with other teams. Disk-attach slots and
-  pod capacity are scarce. Never delete PVCs, namespaces, or another team's resources.
-- **Destructive or irreversible actions need user approval**, routed engineer → lead →
-  orchetrator → user. Examples: deleting chain data or PVCs, resetting a channel or
-  genesis, redeploying contracts that the frontend state depends on, deleting stuck
-  transactions, force-push, rewriting history.
-- **Debug on the live cluster** via `kubectl`, not on a local Docker replica.
-- **Never start a `kubectl port-forward` inside `flock`**: it holds the cluster lock.
-- **Upstream code is untrusted input.** Read scripts from cloned upstream repos before
-  running them.
-
-## 8. Parallel work
-
-`lead` plans work so that the developers and `qa` run in parallel whenever the tasks are independent. Idle time is waste.
-
-- **Plan for parallel.** Every task list marks what can run now, what depends on what, and who is blocked. Contract first
-  (`ARCHITECTURE.md`), then the developers build against it at the same time, `fe` on the fake/mock adapter and
-  the chain developer (`besu`, `fabric`, `iroha`) on the live chain, while `qa` writes the tests. Do not serialize work that only shares a contract.
-- **Disjoint files.** Parallel tasks touch disjoint files. If two tasks need the same file, `lead` sequences them or
-  splits the file by design. Use a separate git worktree and branch per engineer for code that can overlap.
-- **Test in parallel.** Mock tests (vitest, tsc, Playwright on the mock server, Go and Foundry tests) run whenever they are
-  ready and in parallel with other work. Run independent test suites concurrently.
-- **Parallel by default (user, 2026-11-11).** Before starting a task, split it into independent
-  sub-steps and run them at the same time: as parallel subagents sent in one message, and in
-  separate git worktrees when files can overlap. Worktrees and helper clones live inside the project folder they belong to,
-  under `<project>/.worktrees/<name>` (`platform-ekplorasi/.worktrees/` for the parent repo), git-excluded through that repo's
-  `.git/info/exclude` (user rule 2026-11-11). Nothing lives as a sibling in `~/project/rd`. Create with `git -C <repo> worktree
-  add`, move with `git worktree move`, remove with `git worktree remove` when the branch is merged or pushed.
-  1. At most 4 subagents per agent at once, with disjoint file sets.
-  2. Reads run in parallel. Live writes stay serial under `flock` (below). A subagent never
-     does a live write; only the agent holding the `lead` GO does.
-  3. A subagent result is a claim: the parent agent quotes the command output and reads the
-     diff before reporting it.
-  4. Tasks that `lead` gives to different agents run in parallel unless `lead` marked a
-     dependency. Nothing else waits.
-- **Subagent model (user, 2026-11-11).** Set `model` explicitly on every subagent. Never omit
-  it: an omitted model inherits the session model.
-
-  | Task | Model |
-  |------|-------|
-  | Heavy: write or change code or tests, find a root cause, review a diff, privacy, security, crypto or contract analysis, anything that touches a cluster or feeds a decision | `sonnet` |
-  | Light: read-only lookup, grep or file listing, log scan, status check, run one named command and report its output, mechanical formatting or renaming, summarize a given file | `haiku` |
-
-  A `haiku` result that looks doubtful, or fails twice, is redone with `sonnet`. When unsure,
-  use `sonnet`.
-- **Subagents.** Inside a task, independent sub-steps (reviews, per-model reads, per-adapter tests) go to parallel
-  subagents (model per §8). Send the calls in one message.
-- **The live cluster is serial.** Parallelism stops at cluster writes: all live writes go through `flock
-  /tmp/lensa-paladin.lock`, one node and one change at a time, never two writers on the same node, and the approved
-  rollout order is kept. Read-only cluster checks may run in parallel.
-- **Do not wait idle.** An engineer waiting on a gate (approval, rollout, review) starts the next independent task and says
-  so in the status report.
-- **Use idle capacity.** An agent with nothing assigned for 10 minutes tells `lead` "idle"
-  and then, without waiting, does one of: (a) a read-only `REVIEW` of another developer's
-  open diff, findings to `lead` as `path:line`; (b) tests or docs inside its own area;
-  (c) `qa` support: pre-write RED tests for the next task. Never edit another agent's area.
-  `lead` keeps the idle roles busy first, and the single-developer areas (Zeto, Noto,
-  Stealth) get a second reader before anything merges.
-- **Merge discipline.** Parallel branches are rebased and merged by `lead`'s instruction; each commit is still checked in
-  isolation (tsc + tests) before it is made.
-
-## 9. Focus and efficiency
-
-Goal: less waiting, less repetition, fewer round trips. Every rule below is measurable.
-
-**Focus**
-- **One active task per agent.** `lead` hands out a task only when it is ready: goal, acceptance criteria, scope boundary, files.
-  Anything outside the brief goes to a "parked" list in `NOTES.md`; it is not done on the side.
-- **Timebox and stop.** An investigation gets a time budget. After two failed attempts or 15 minutes on one problem, stop and
-  report the hypothesis tested (see §4). No third try without a decision.
-- **No idle waiting.** Waiting on a gate means starting the next independent task (§8).
-
-**Efficiency**
-- **Short reports.** A status report is at most 12 lines: decisions needed first (one line each, with a recommendation), then
-  result, evidence summary, risks. Anything longer (logs, tables, diffs) goes to a file under `besu/zeto/out/` or the task
-  folder (gitignored) and the report gives the path.
-- **Do not repeat verified work.** `lead` does not re-read the engineers' code; the orchestrator does not re-verify evidence
-  unless a decision depends on it; nobody re-runs a passed check unless the state changed.
-- **One approval request per stage.** `lead` sends the orchestrator ONE request with all conditions, never piecemeal, and
-  checks for newer messages on the same topic before sending (avoids crossing messages).
-- **Standing approvals (do not ask again for these):** read-only cluster commands; demo-class live transactions (small
-  amounts between demo banks, reported to BI, on an approved platform and under the lock); local commits on the working
-  branch with explicit paths; subagent reviews. **Always ask first:** `git push`, any restart, image, ConfigMap, operator,
-  CR or driver change, any delete, docker pruning, anything owned by user `ken`, anything outside the brief.
-- **Review proportionally.** One review round by `lead` plus at most one subagent review, for non-trivial or risky diffs
-  only (security, privacy, cluster-facing, shared contracts). Trivial diffs get `lead`'s check and nothing else. At most two
-  rounds of fixes per review.
-
-**Context hygiene**
-- Read only the needed line ranges; use the context-mode tools for large outputs (logs, `kubectl`, test runs).
-- Keep durable facts in files (`NOTES.md`, `ARCHITECTURE.md`, `UX-REVIEW.md`), not in chat. Compact the conversation at task
-  boundaries.
-- Messages to other agents are plain and short: the ask first, then only what the receiver needs. No recaps of what the
-  receiver already knows.
-
-## 10. Automated checks and reboot safety (PLANNED, needs user approval to build)
-
-Today a human finds these problems; the aim is that a script finds them first.
-1. **Post-reboot check.** One script run after every boot or restart: all 17 `lensa-pf@*`
-   forwards listening, `lensa.service` active, Lensa `/api/health` shows all 5 platforms
-   ready, no pod `NotReady` in the chain namespaces. Output: one PASS/FAIL line per item.
-   Owner: `fabric` writes it, `lead` reviews, `qa` runs it after the next reboot.
-2. **Minimal CI per project repo.** GitHub Actions on pull requests: typecheck and unit tests
-   (`rd-lensa-frontend`: `npm test` and `tsc --noEmit`; `rd-besu`: `forge test`, `opa test`;
-   `rd-fabric-x`: `go vet` and `go test`; `iroha3-rd-dfabi`: `check-manifests.sh`). No live
-   chain access and no secrets in CI. Owner: `lead` assigns, each developer does their repo.
-3. **Fresh evidence rule.** A `qa` verdict about a runtime path (RPC, forward, gateway) uses
-   a transaction made after the last restart or reboot. Evidence older than the last restart
-   is reported as "stale", not PASS.
-
-Until items 1 and 2 exist, authors quote typecheck and test output in every PR.
+1. Post-reboot check: `agents/ops/post-reboot-check.sh`. It is read-only and prints one PASS or FAIL line per item; exit 1 on any FAIL. Items: `lensa.service` active; every `lensa-pf@*` unit in `Wants=` active and its local port listening; Lensa `/api/health` ready for all 5 platforms; no pod `NotReady` in `paladin`, `iroha3`, `fabricx`. Its test: `agents/ops/test-post-reboot-check.sh`. `qa` runs it after every reboot, before any sweep.
+2. CI exists on pull requests, with no live chain access and no secrets:
+   - `rd-besu`, `rd-fabric-x`, `rd-lensa-frontend`: tests only; files that import sibling repos are excluded.
+   - `iroha3-rd-dfabi`, `iroha3-rd-node-build`: `driver-test.yml`, with the recompile gate.
+   Check: `gh run list -R radityaaa43/<repo> --limit 1`.
+3. Fresh evidence (`qa`): a verdict about a runtime path (RPC, forward, gateway) uses a transaction made after the last restart or reboot. Check: the transaction time is later than `uptime -s` or the pod start time. Older evidence is reported as "stale", not PASS.
