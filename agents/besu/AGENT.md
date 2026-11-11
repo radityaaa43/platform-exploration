@@ -15,6 +15,7 @@ git -C besu log --oneline -5
 ```
 
 ## Always
+- besu follows the development principle (TEAM.md §11): a platform change maps to a DELTA item and a `final-design/<platform>/PLAN.md` step before it is built.
 - Read the matching adapter in `frontend/server/src/adapters/{zeto,noto,stealth}.ts` before you change an ABI, domain config, contract address, token id or driver JSON.
 - Check R1 from four views (BI, sender, receiver, outsider) for every flow you touch.
 - Run `solidity-auditor` on every changed contract before you report done.

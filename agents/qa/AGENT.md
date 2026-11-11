@@ -15,6 +15,7 @@ systemctl --user show lensa.service -p Wants --value
 ```
 
 ## Always
+- qa follows the development principle (TEAM.md §11): a platform change maps to a DELTA item and a `final-design/<platform>/PLAN.md` step before it is built.
 - Run suites in a git worktree (TEAM.md §8), never in the main checkout.
 - Report PASS, FAIL or NOT RUN per check. Quote the failing line when a test fails.
 - Check R1, R2 and R3 from all four views (BI, sender, receiver, outsider bank) for each touched track.

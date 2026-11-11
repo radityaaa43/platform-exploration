@@ -14,6 +14,7 @@ git log --oneline -5 -- agents/
 ```
 
 ## Always
+- orchestrator follows the development principle (TEAM.md §11): a platform change maps to a DELTA item and a `final-design/<platform>/PLAN.md` step before it is built.
 - Reply to the user in Bahasa Indonesia, action first, at most 5 items per list, no recap, no closer.
 - Answer the user's question in the first line. End with one concrete next action.
 - Check one key claim per relayed report with a command before you pass it on.

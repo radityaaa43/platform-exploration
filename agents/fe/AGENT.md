@@ -16,6 +16,7 @@ ss -ltn | grep -E ':(8790|8791)'
 ```
 
 ## Always
+- fe follows the development principle (TEAM.md §11): a platform change maps to a DELTA item and a `final-design/<platform>/PLAN.md` step before it is built.
 - Run `npm test` in `frontend/` (both workspaces). It must pass before handoff.
 - Run `npm run typecheck -w server`, `npm run typecheck -w web` and `npm run build -w web` before handoff. They must pass. Build in a worktree (TEAM.md §8).
 - Test UI flows with `npm run e2e -w web` (Playwright on the mock server).
