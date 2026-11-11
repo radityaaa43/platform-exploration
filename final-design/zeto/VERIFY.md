@@ -54,3 +54,38 @@ Status: re-checked against fd-zeto 7690b2c (fourth analyst pass; user approved t
 - HSM/Vault signing: plugin code, excluded (A:158).
 - Cross-cluster latency tunables and the LB/NAT source IP vs `ipBlock`: not found upstream / inferred; only reachability and block sync are checkable.
 - Deletes (S22): user-only; qa proves the state after, never acts.
+
+
+## Layer-7 record, S21 attempt 3 (qa, 2026-11-12; times UTC 2026-11-11 = CST - 8 h)
+Evidence: `final-design/verify/evidence/s21-layer7/` (`stage-lines.txt`, noto pre/post balances, logs and run outputs; the two large Playwright JSON reports stay on the host with their sha256 in `stage-lines.txt`). Runner scripts: `l7-rerun.py` (stages lock, outsider-pre, flows, outsider-post; stops at the first FAIL; every line names credential + transport) and `noto-rerun.py` (--go, --go4) in the qa scratchpad. Rules in force: stop at the first error, no retry, no rollback, no criterion change in flight (a change goes to lead and the analyst first).
+
+| Stage | Result | Evidence |
+|---|---|---|
+| Entry gate (served sha 35c0f52 with the fix 41607a7 as ancestor, noto history 200 x4, 4/4 Paladin row, proof 3 = 0/0 x4 operator count read, peer-TLS non-noise = 0 x4, forward 31648 -> rd-zeto-bank-a) | PASS (05:17 CST) | `L6-COMMON.md` section 1; messages to lead |
+| 1 LOCK | PASS on attempt 2 (23:00:32Z) after two FAILs | `stage-lines.txt` |
+| 2 OUTSIDER-PRE | PASS on the corrected criterion (23:02:12Z) after one FAIL | `stage-lines.txt` |
+| 3 FLOWS | zeto 6/6, noto 6/6 (rd-issue, rd-transfer in run 1; the other four in run 2), BI-DELTA cells PASS | `stage-lines.txt`, noto logs |
+| 4 OUTSIDER-POST (Lensa API views) | PASS on the fresh zeto dvp and the fresh noto dvp | `stage-lines.txt` |
+| 4 checks 2 and 3 (no states / no domain receipt; PD011658 line) | FAIL-pending-analysis (not NOT-RUN) | besu's node4 probe read; with the analyst |
+| LAYER 7 | NOT PASS yet; R7 stays open | until the analyst rules on checks 2 and 3 |
+
+### The FAIL events (kept in the record, with what was done)
+1. Lock check before the publish (21:18Z): `L6 zeto LOCK: FAIL createLock ... 403`. Cause: OPA `gw/allow` false for `ptx_sendTransaction createLock` because no Kebijakan document was published (`clock.token_open` closed; `spendLock/delegateLock/cancelLock` are never hours-gated). Done: stop, report; besu/fe published the documents (06:41-06:45 CST), proven allow in hours.
+2. Lock check attempt 1 after the publish (22:48Z): `FAIL cancelLock ... PD011615: Input state 0 not found`. Cause: test sequence bug in `lock-check.ts` (`prepareSpend` before `cancelLock` on the same lock). Left behind: 1 RD unit of bank A locked (lockId 0x08295c88...dbde, prepare-only tx 81daa2e9 reserving the coin in node2's coordinator memory); recorded in `agents/qa/REGISTER.md` register-lite. Done: stop at the first error, no retry, no rollback; besu fixed the script (rd-besu #84 at cedec5a, cancel path without prepareSpend + `LOCK LEFT OPEN` guard); attempt 2 PASS and net zero against the new baseline 5009990994; the residue is cleaned later (node2 restart after layer 7, then one cancel; success = A RD 5009990995).
+3. Stage 2 criterion bug (23:00:59Z): R1-pre-C and R1-pre-C-history FAIL. Cause: qa's script assumed an outsider has no node part and is not listed in history; the real API shape is: C's history lists the tx as role outsider / verdict sealed / amount null / counterparty null, and C's receipt has a node part without a Transfer row. What was done: STOP, the shape was read read-only, the criterion was corrected (selftest extended, mutant caught) and the same read-only stage re-run (PASS 23:02:12Z); lead pointed out that changing an acceptance criterion after a FAIL is a new decision: it was reported up and ACCEPTED by the analyst with the exact definition below. Rule since: a FAIL means STOP and report, never change the criterion in flight.
+4. Stage 3 infra failures (not test results): (a) first launch (23:02:33Z) died at Playwright config load, `Cannot find package '@playwright/test'` (the scratch worktree lacked the frontend root node_modules link; fix = a read-only symlink into the served checkout's node_modules, nothing installed or written, `find -newer` empty after every run); (b) the harness killed the next background run for low system memory after all 12 flows had executed (the final summary was lost); evidence was rebuilt from the Playwright HTML report written before the kill (zeto) and the chain (balances, histories); no blind retry; the noto spec was then re-run alone with a memory check (>= 1.5 GiB available), pre-balances to disk first, log and JSON report straight to disk.
+5. Noto run 1, `rd-transfer` FAIL (23:14Z): the test's page-error assertion caught one `502 http://127.0.0.1:8790/api/network?model=noto`. Cause (fe, journal): server-side 5 s route deadline (`app.ts`) versus serial 10 s per-validator polls; one slow door answers 502 instead of marking the node down. A transient-triggered Lensa robustness defect, not a transaction failure (the money moved; `/api/network?model=noto` read 200 x3 right after, 4 validators + 4 paladin nodes up). Done: STOP, no retry, no criterion change; fe's fix PR is NOT deployed; lead decided to run only the four remaining flows (they passed).
+
+### Outsider sealed definition (analyst, exact; R1 Zeto/Noto on Paladin)
+"Outsider sealed (R1, Zeto/Noto on Paladin)" = for the non-party node, ALL of:
+1. no Transfer row, no amount, no counterparty in history or receipt (amount null, counterparty null);
+2. no states and no domain receipt for that tx;
+3. a state read for the tx's output state ids returns PD011658 (quote the error line);
+4. ONLY the base receipt is visible (status, domain, contract, block).
+Why 4 is not a failure: every node indexes the public base ledger (Besu 1337), so tx existence, contract, block and timing are visible to all members; inherent to a shared base ledger, not a Zeto/Noto leak. It is recorded ONCE in the R1 row as "metadata visibility" and does not change the R1 verdict. Parties A + B: the Transfer row with the amount. BI: via the report (the Zeto R1 limit).
+Status of the four checks on the evidence: 1 PASS (stage 2 and stage 4, Lensa API, old and fresh tx); 4 PASS (C's receipt carries only the base part: status, domain, contract, block, and a state count); 2 and 3 FAIL-pending-analysis: besu's node4 probe read found that C holds a domainReceipt and data states for the tx (earlier qa observation: C's receipt shows `State privat = confirmed 12`, A's 13); the analyst rules on whether the states are ids/commitments only (check 2 wording: "no state DATA and no domain receipt (state ids/commitments = public base-ledger metadata)") or an R1 break. `classify_state_read` in `l7-rerun.py` classifies besu's quoted output (selftest + mutant).
+
+### Checks 2 and 3: the analyst's pre-set outcomes (decided by besu's node4 read; result to be filled when lead relays it)
+- Outcome A (benign): check 2 = "no state DATA in any coin or lock schema and no domain receipt with amounts/owners; tree states derived from public events allowed"; check 3 = "a state read for the tx's coin/lock output ids returns not-found/unavailable" (quote which: PD011658 or the unavailable result). Then LAYER 7 R1 = PASS.
+- Outcome B (break): LAYER 7 = FAIL for R1, plus a FREEZE on new Zeto/Noto user txs from Lensa (reads stay OK). Lead says which.
+- RESULT: PENDING (not relayed yet). Until then checks 2 and 3 = FAIL-pending-analysis and layer 7 is not PASS.
