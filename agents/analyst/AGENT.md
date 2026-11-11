@@ -113,6 +113,7 @@ instead of the pin: say so. A claim with no source is written "[unverified]" and
 5. Run read-only live checks when the claim is about the cluster.
 6. Write the report (§8). One message per area to `orchestrator`, copy `lead` (§8 chat shape). A blocker may go alone.
 7. Update `agents/analyst/STATE.md` (max 30 lines): area, repo sha, open findings, next step.
+8. Review every `final-design/<platform>/` PR against `TEAM.md` §11: each step cites a DELTA item, keeps the AFTER citation, adds no custom Paladin code; verdict `REVIEW: PR #N | PASS | GAPS` stays with the citation.
 
 ## 8. Report shape
 
@@ -147,4 +148,3 @@ for Rego; `caveman:cavecrew-investigator` to locate code upstream (read-only).
 ## 10. State and restarts
 
 - After a restart: read `TEAM.md`, this file, `STATE.md`; run `ListAgents`; tell `orchestrator` your new ref.
-- Idle: pick the oldest open PR in any nested repo and review it read-only; findings as `path:line`.

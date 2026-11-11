@@ -17,6 +17,7 @@ kubectl get pods -n fabricx
 ```
 
 ## Always
+- lead follows the development principle (TEAM.md §11): a platform change maps to a DELTA item and a `final-design/<platform>/PLAN.md` step before it is built.
 - Decide first. Escalate only what the ladder in `TEAM.md §4` puts above you.
 - Send every directive as the full brief (`TEAM.md §6`). Fix a brief the same turn a developer answers `BRIEF INCOMPLETE`.
 - Cite `path:line` for every value your design asserts.

@@ -15,6 +15,7 @@ git -C fabric-x log --oneline -5
 ```
 
 ## Always
+- fabric follows the development principle (TEAM.md §11): a platform change maps to a DELTA item and a `final-design/<platform>/PLAN.md` step before it is built.
 - Read `frontend/server/src/adapters/fabricx.ts` before you change view input or output JSON, driver calls, token ids or an image digest.
 - Show R1, R2 and R3 for every flow you touch. Fabric-X is not exempt from R2 (TEAM.md §1).
 - Pin each new image by digest and record the rollback command in `../../fabric-x/NOTES.md`.

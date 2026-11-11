@@ -16,6 +16,7 @@ ls -t iroha3/reports | head -3
 ```
 
 ## Always
+- iroha follows the development principle (TEAM.md §11): a platform change maps to a DELTA item and a `final-design/<platform>/PLAN.md` step before it is built.
 - Check every claim against the pinned source `071e281e`, not upstream main (TEAM.md §9).
 - Read `iroha3/docs/` and the latest `iroha3/reports/` before you design a change.
 - Read `frontend/server/src/adapters/iroha3.ts` and `iroha3-intent.py` before you change a Torii call, intent shape, or asset or account id.
