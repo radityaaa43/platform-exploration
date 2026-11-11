@@ -76,7 +76,8 @@ Every user-only item from the five plans, with the step it blocks and the defaul
 | 19 | Iroha auditor orgs 2 and 3 (k-of-n) | iroha3 | iroha3 S12 | single auditor / 2-of-3 with named orgs | single auditor stays (accepted upstream gap) | iroha3/adr/0002 |
 | 20 | Iroha BI streaming identity key rotation (printed to one agent terminal 2026-11-11) | iroha3 | iroha3 S4 (BI cutover) | rotate at cutover / rotate now (peer restart) / accept | rotate at the BI namespace cutover (new peer.toml there) | - |
 | 21 | Iroha new genesis = new network_id: balances and the 147 audit records do NOT carry | iroha3 | iroha3 S5 | accept (snapshot old audit store) / keep old chain | accept; old audit store snapshotted before decommission | - |
-| 22 | Decommission the old cluster-1 namespaces after cutover proof (destructive) | all | last step of every plan | per directive | as directed: own CLUSTER-OP at that time, named backup first | - |
+| 22 | Bond controllability (`isControllable` true; `renounceControl` is irreversible and strands DvPEscrow refunds that wait for the controller) | stealth | stealth S12 (renounce option only) | keep controllable with the custodian as controller / empty controllers / `renounceControl` | keep controllable, custodian = controller | stealth/adr/0004 |
+| 23 | Decommission the old cluster-1 namespaces after cutover proof (destructive) | all | last step of every plan | per directive | as directed: own CLUSTER-OP at that time, named backup first | - |
 
 ## How this is reviewed and approved
 
