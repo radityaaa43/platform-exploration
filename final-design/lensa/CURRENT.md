@@ -46,7 +46,7 @@ Tags: [L] live read-only command on the host, output quoted; [R] repo `path:line
 ## 5. Gaps against a pod
 Numbered as in `docs/in-cluster-facts.md` section 6. Status at `28c8bdb`: all nine still open.
 1. Sibling source in the build context (private repos). 2. Foundry `out/` artifacts. 3. Four `npm ci` trees. 4. `tsx` is a devDependency. 5. Bind host and liveness. 6. `docker run` for the Iroha APS driver cannot run in a pod. 7. kube credential for Publisher and Besu view. 8. `state/` persistence. 9. Secrets in the process today (the keyless steps of the platform plans must land first).
-Extra finding, not in the facts doc: `dvp-shared` is the one Iroha op outside the keyless contract until README row 18 (iroha3 PLAN S16). It needs all Iroha seeds and `docker run` in one process, so it has no home in a keyless pod. See PLAN.md decision L4.
+Extra finding, not in the facts doc: `dvp-shared` is the one Iroha op outside the keyless contract until README row 18 (iroha3 PLAN S16). It needs all Iroha seeds and `docker run` in one process, so it has no home in a keyless pod. See PLAN.md decision L7.
 
 ## 6. What this file does not cover
 [U] image build time and size (nothing built); pod CPU and memory (never measured); which `besu/zeto/config.json` and `noto+pente/common` config lookups the live code path hits; whether `package-lock.json` at the repo root reproduces the sibling installs; Alibaba `cloud_essd` PL0 minimum disk size on cluster 1.
