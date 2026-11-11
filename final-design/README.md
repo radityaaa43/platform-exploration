@@ -49,18 +49,34 @@ Cluster 2 sequencing inside each platform follows the analyst's capacity note (`
 - **Keys and custody.** Paladin signing keys are already per node (zeto/noto); Stealth and Iroha keys move out of Lensa; the Iroha BI `[streaming] identity_private_key` exposure of 2026-11-11 (iroha3/CURRENT.md section 11, no value) is a pending user rotation decision and a prerequisite of the BI Iroha cutover.
 - **Proofs.** Every live step has a RED proof (fails before, passes after) that `qa` runs from `VERIFY.md`; the BI-balance proof is the cutover gate on every platform.
 
-## Open user decisions (BLOCKED steps, one ADR each, status proposed, decision left to the user)
+## User decisions, in one place
 
-| Decision | Platform(s) | ADR |
-|---|---|---|
-| Registry rootless (Paladin registry root key signs bank entries today) | Zeto, Noto+Pente | `zeto/adr/`, `noto-pente/adr/` |
-| Stealth custodian party | Stealth | `stealth/adr/` |
-| Proving-key ceremony (Zeto circuits) | Zeto | `zeto/adr/` |
-| Atom.cancel mitigation | Zeto | `zeto/adr/` |
-| Iroha 3 multi-party leg exchange (full self-submit needs custom code, blocked by the no-custom rule) | Iroha 3 | `iroha3/adr/` |
-| Fabric-X orderer party placement across two clusters (re-genesis) | Fabric-X | `fabricx/adr/` |
-| Retire the multiregion stack | per file | per platform |
-| Iroha BI streaming identity key rotation | Iroha 3 | `iroha3/adr/` |
+Every user-only item from the five plans, with the step it blocks and the default `lead` would apply if the user says nothing (the default is a recommendation, not a decision; ADRs are status proposed). `orchestrator` presents this table to the user once, after the README PR.
+
+| # | Decision | Platform | Blocks step | Options (ADR has pros/cons) | Default if the user says nothing | ADR |
+|---|---|---|---|---|---|---|
+| 1 | Cluster-2 credential: the real Singapore kubeconfig, admin on new namespaces only | all | zeto S2, stealth S1, iroha3 S8, fabricx S9 | supply it / keep cluster 1 only | none; without it bank C stays on cluster 1 as a plan deviation | - |
+| 2 | Paladin CRDs on cluster 2 (cluster-scoped install, beyond new namespaces) | zeto, noto | zeto S9 (bank C node) | install `paladin-crds` chart / bank C Paladin node on cluster 1 | none; explicit yes needed (first cluster-scoped write on cluster 2) | - |
+| 3 | Spend: LoadBalancers for cross-cluster peers (Besu bank C TCP 30303, Paladin 9000, Iroha peer LBs, gateways) | zeto, stealth, iroha3 | zeto S4/S10, iroha3 S6, stealth S5 | minimum count per plan / relay hub (iroha3) | minimum count, TCP-only, one per cross-cluster endpoint | - |
+| 4 | Registry rootless: today BI's root key signs bank registry entries | zeto, noto | zeto S11, noto S5 | keep BI root (cited upstream limit) / new rootless registry + re-registration | keep BI root, recorded as accepted limit; endpoint republish runs as a runbook | zeto/adr/0001, noto-pente/adr/0001 |
+| 5 | Proving-key ceremony (Zeto circuits; replacing keys = rebuild of the running fork image) | zeto | zeto S12 | keep bundled keys / ceremony + image rebuild | keep bundled keys (research scope); ceremony listed as follow-up | zeto/adr/0002 |
+| 6 | Atom.cancel mitigation and the BI-down cancel test | zeto, noto | zeto S13, noto S14 | test only / contract change | test only, no contract change; result recorded | zeto/adr/0003, noto-pente/adr/0002 |
+| 7 | Zeto seed custody: copy under party custody is a trust reset; rotate or not | zeto | zeto S6/S7 | copy only / rotate (new identities, balances moved) | copy under party custody now; rotation as follow-up | zeto/adr/0004 |
+| 8 | Bank-side DvP flow (who drives seller and buyer legs) | zeto | zeto S18 | per ADR | keep today's flow until chosen | zeto/adr/0005 |
+| 9 | Stealth custodian party (DvPFactory custodian, bond controller) | stealth | stealth S12, S13, S15 | BI / a bank / a new party | BI (status quo) | stealth/adr/0001 |
+| 10 | DFABI certificate model (R2 for Stealth: BI must sign a certificate before a bank tx) | stealth | stealth S13 | keep online BI signer (R2 stays GAP, documented) / change model | keep online signer, R2 GAP recorded | stealth/adr/0002 |
+| 11 | RD issuer redeploy vs key move | stealth | stealth S14 | move key, keep address / redeploy | move key, keep address | stealth/adr/0003 |
+| 12 | Stealth key reset after the custody move (keys sat in Lensa's shared state file) | stealth | stealth S9, S10, S21 | copy only / rotate per bank | copy now, rotate per bank as follow-up; Lensa copy destroyed at S21 | - |
+| 13 | Fabric-X orderer/committer party placement across two clusters (re-genesis either way) | fabricx | fabricx S9, S10, S11, S18 | per ADR (X/Y) | none; the user picks (data does not carry across the re-genesis) | fabricx/adr/0001 |
+| 14 | Retire the multiregion namespaces `fabricx-bi`, `fabricx-bank-a/b/c` on cluster 1 | fabricx | fabricx S21 | retire after inventory + backup / keep | retire, after inventory and named backup | fabricx/adr/0002 |
+| 15 | LifecycleEndorsement policy | fabricx | fabricx S8 | 4-of-4 / MAJORITY | MAJORITY (one org down must not block lifecycle) | fabricx/adr/0003 |
+| 16 | Delete `rdbi-driver` Deployment + `rdbi-driver-files` Secret (view keys of every node) | fabricx | fabricx S5 | delete after export / keep | delete after manifest export (Secret unrecoverable unless exported) | - |
+| 17 | Post the accepted Panurus patches upstream | fabricx | fabricx S7 | post / keep local | keep local (standing rule: post nothing upstream) | - |
+| 18 | Iroha leg exchange (full self-submit needs custom code) | iroha3 | iroha3 S17 | per ADR | keep the BI sponsor path (no custom code) | iroha3/adr/0001 |
+| 19 | Iroha auditor orgs 2 and 3 (k-of-n) | iroha3 | iroha3 S12 | single auditor / 2-of-3 with named orgs | single auditor stays (accepted upstream gap) | iroha3/adr/0002 |
+| 20 | Iroha BI streaming identity key rotation (printed to one agent terminal 2026-11-11) | iroha3 | iroha3 S4 (BI cutover) | rotate at cutover / rotate now (peer restart) / accept | rotate at the BI namespace cutover (new peer.toml there) | - |
+| 21 | Iroha new genesis = new network_id: balances and the 147 audit records do NOT carry | iroha3 | iroha3 S5 | accept (snapshot old audit store) / keep old chain | accept; old audit store snapshotted before decommission | - |
+| 22 | Decommission the old cluster-1 namespaces after cutover proof (destructive) | all | last step of every plan | per directive | as directed: own CLUSTER-OP at that time, named backup first | - |
 
 ## How this is reviewed and approved
 
