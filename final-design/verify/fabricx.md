@@ -56,3 +56,8 @@ The pod names and the stop method are named by `fabric` in each word request.
 | gateway + OPA | `fx-gw-<N>` | 4 |
 | bundle server | per party `[unverified]` | 4 |
 The token namespace `rd_dfabi_v2` is one shared instance (S14), reached through each party's own node. Placement: BI, A, B `ap-southeast-5`; C `ap-southeast-1`. Line `L6 fabricx 4OF4`.
+
+## 10. P-check / open R-rows (`L6-COMMON.md` section 9; register `agents/qa/REGISTER.md`)
+- P1: D3 + host key listing; P2: D4 + kubeconfig modes; P3: consensus row of section 8; P5: image refs vs the pins in `final-design/fabricx/PLAN.md`; P6: section 8 matrix.
+- P4 allowed third parties (cited, everything else FAIL): none required upstream (3-of-4 endorsement and report-to-BI are deployment choices, documented as such).
+- Open R-rows for this platform: R1, R4 (CA admin passwords of 4 orgs on one host; blocks new uses), R5 (ceremony admin keys never co-located), R6 (`ids/anon` creator key shared in every org pod: permanent on this channel, exemption pending), R8 (`fx-gw`/OPA 0/4 + `rd_dfabi_v2`: closes at S14/S16), PROPOSED R13 (Role/RoleBinding `reconcile` in `rd-fabricx-bi` by cluster-admin: awaiting decision). `L6 fabricx OPEN-R` quotes each with its state read now; any open row = PARTIAL unless `lead` accepts it in writing.

@@ -54,3 +54,8 @@ Any single peer down stops user txs; an auditor down means no Prepare (A:118-120
 | gateway + OPA | per party gateway | 4 |
 | bundle server | per party `[unverified]` | 4 |
 RD/DFABI are in genesis (one instance). Placement: BI, A, B `ap-southeast-5`; C `ap-southeast-1`. Line `L6 iroha3 4OF4`.
+
+## 10. P-check / open R-rows (`L6-COMMON.md` section 9; register `agents/qa/REGISTER.md`)
+- P1: D3 + host key listing; P2: D4 + kubeconfig modes; P3: consensus row of section 8; P5: image refs vs the pins in `final-design/iroha3/PLAN.md`; P6: section 8 matrix.
+- P4 allowed third parties (cited, everything else FAIL): the APS online auditor (BI today; 2-of-3 auditors A+B planned, k-of-n up to 32 supported upstream).
+- Open R-rows for this platform: R1, R8 (gateway/OPA 0/4 + 2-of-3 auditors: closes at iroha S14 + S11-S13), R10 (`bi-gov` seed host backup: closes when moved off-host, then shredded), R12 (window-A host forwards + read-lens NOT-RUN: closes at the window-B gateways). `L6 iroha3 OPEN-R` quotes each with its state read now; any open row = PARTIAL unless `lead` accepts it in writing.

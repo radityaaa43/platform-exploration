@@ -61,3 +61,8 @@ Lines: `L6 zeto BAL-P1`, `BAL-issue`, `BAL-award`, each PASS/FAIL/SKIP.
 | gateway + OPA | `bank-gw-<N>` (Ready, OPA sidecar or pod) | 4 |
 | bundle server | `bundle-server` per party `[unverified: BI only today; if it runs only in rd-zeto-bi, record PARTIAL, not 4/4]` | 4 |
 Placement: BI, A, B `ap-southeast-5`; C `ap-southeast-1`. Line `L6 zeto 4OF4`.
+
+## 10. P-check / open R-rows (`L6-COMMON.md` section 9; register `agents/qa/REGISTER.md`)
+- P1: D3 + host key listing; P2: D4 + kubeconfig modes; P3: consensus row of section 8; P5: image refs vs the pins in `final-design/zeto/PLAN.md`; P6: section 8 matrix.
+- P4 allowed third parties (cited, everything else FAIL): BI as the report-group member (Zeto has no observer role; analyst A:153); no other.
+- Open R-rows for this platform: R1 (host keys), R7 (Paladin 0/0, live 4 in old Jakarta: closes at S21 with `kubectl -n paladin get sts` 0/0), R9 (validator set 8: closes at S5b), R11 (`lensa-publisher` SA in `rd-zeto-bi`: closes at zeto S20). `L6 zeto OPEN-R` quotes each with its state read now; any open row = PARTIAL unless `lead` accepts it in writing.
