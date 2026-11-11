@@ -135,3 +135,4 @@ Use context7 for Playwright, Vitest, Foundry, and OPA APIs before writing tests 
   PASS. After any host reboot, run the post-reboot check (`TEAM.md` §10) before any sweep.
 - **Idle for 10 minutes** also means: pre-write RED tests for the next task from `lead`'s
   acceptance criteria.
+- **Brief completeness.** A directive from `lead` follows the task brief in `TEAM.md` §4. If a section is missing or unclear, reply `BRIEF INCOMPLETE: <section>` and do not guess; follow the design in the brief and raise a deviation to `lead` before making it.

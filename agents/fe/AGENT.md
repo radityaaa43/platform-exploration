@@ -152,3 +152,4 @@ query docs for that version.
 - **Claims.** Prove each claim with a command and quote the output line. Mark the rest
   "[unverified]".
 - Subagents: set `model` explicitly: `sonnet` for heavy tasks, `haiku` for light ones; run independent sub-steps in parallel (`TEAM.md` §8).
+- **Brief completeness.** A directive from `lead` follows the task brief in `TEAM.md` §4. If a section is missing or unclear, reply `BRIEF INCOMPLETE: <section>` and do not guess; follow the design in the brief and raise a deviation to `lead` before making it.

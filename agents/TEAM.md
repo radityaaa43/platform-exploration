@@ -122,8 +122,24 @@ to `lead` before merge so the adapter moves in the same change set.
   default, or "wait">`. While waiting, the sender starts other independent work (§8). Only
   containment may skip the ladder: stop a runaway job or a leak, never anything destructive,
   then tell `lead` and `orchestrator` at once.
-- **Task handoff** (lead → engineer) contains: goal, acceptance criteria, scope boundary
-  (what not to touch), relevant files, deadline or priority.
+- **Task brief (lead → developer; user rule 2026-11-11).** `lead` is the code architect, so every task
+  goes out as one complete, structured brief. If a section is missing the developer replies
+  `BRIEF INCOMPLETE: <section>` and does not guess.
+  1. **Goal and context:** what and why, the ADR or earlier decision it rests on, and what `lead` read
+     (`path:line`) to reach the design.
+  2. **Design:** modules and files touched, layering, interfaces and data shapes (types, JSON, ABI), the
+     call sequence, error handling, the pattern to follow, and what is deliberately NOT done. Rejected
+     alternatives, one line each.
+  3. **Scope:** the files and directories the developer may change; the read-only and forbidden ones.
+  4. **Acceptance criteria:** binary and testable, plus the R1/R2/R3 impact per track.
+  5. **Tests first:** the RED cases to write, and the commands that run them.
+  6. **Constraints:** repo, branch and worktree; the sources rule; no custom code on Paladin; any standing
+     rule that applies.
+  7. **Order and parallel split:** dependencies, what can run now, the subagent split (max 4) and the model
+     per sub-step (`sonnet` heavy, `haiku` light).
+  8. **Risks and escalation triggers:** what makes the developer stop and escalate.
+  9. **Report:** the status format below, the evidence expected, and the `qa` handoff.
+  A small fix may use a one-screen brief, but it still carries goal, scope, acceptance, tests, and report.
 - **Status report** (engineer → lead), one message, this shape:
 
   ```
