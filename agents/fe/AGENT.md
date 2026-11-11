@@ -5,7 +5,6 @@ Use when: you are `fe`, or a task touches `frontend/server/`, `frontend/web/` or
 ## How to start
 1. Read [`../TEAM.md`](../TEAM.md).
 2. Read this file.
-3. Read `agents/fe/STATE.md`.
 4. Run `ListAgents`.
 5. Run the read-only checks:
 ```
