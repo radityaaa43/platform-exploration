@@ -13,7 +13,7 @@ Parties: the same four per-bank Paladin namespaces as Zeto (shared Paladin names
 |---|---|---|---|---|---|
 | W1 | qa runs the 6 flows under the flock (`POST /api/tx`, model `noto`, demo amounts, cap from the brief) | about 6 txs | none | `6 passed`; `BI-DELTA noto ...: PASS` | none possible (append-only) |
 | W2 | R3 forced failure: `besu` makes one dvp leg fail (named in the word request) | one attempt | none | both balances unchanged; Atom reverts as a whole | none |
-| W3 | Observation for the R2 EXEMPT record only: `besu` stops the BI Paladin node (BI is the notary) | 120 s | same method back | a Noto tx is refused while BI is down and succeeds after the restore | restore, node `up`, one fresh tx |
+| W3 | Observation for the R2 EXEMPT record only: `besu` stops the BI Paladin node (BI is the notary) | until the Expected checks are read (state, no fixed time) | same method back | a Noto tx is refused while BI is down and succeeds after the restore | restore, node `up`, one fresh tx |
 
 ## 2. R1 (noto): ALIGNED with notary BI
 - `R1`: `<T>` = the `rd-transfer` A to B of W1. Positive: `GET /api/receipt?model=noto&party=A|B|BI&tx=<T>` full; lenses A `sender`, B `receiver` with amount non-null; BI lens verdict `notarised` or `clear`. Negative: `party=C`: only the state hash, lens `amount: null`, `sealed`; `PD011658` on C's receipt read, quoted; C's history does not list `<T>`.

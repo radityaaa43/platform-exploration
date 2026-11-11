@@ -12,9 +12,9 @@ Parties: `rd-fabricx-bi`, `-bank-a`, `-bank-b` (cluster 1), `-bank-c` (cluster 2
 | W | Action | Duration | Restore | Expected | Rollback |
 |---|---|---|---|---|---|
 | W1 | qa runs the 6 flows under the flock (`POST /api/tx`, model `fabricx`, demo amounts, cap from the brief) | about 6 txs | none | `6 passed`; `BI-DELTA fabricx ...: PASS` | none possible (append-only ledger) |
-| W2 | R2a: `fabric` stops ONE bank's endorsing pod (not BI), e.g. `rd-fabricx-bank-b` | 300 s | scale back | `rd-transfer` and `dvp` between the other two parties still settle | restore, pod Ready, one fresh tx |
-| W3 | R2b: `fabric` stops BI's endorsing pod | 300 s | scale back | a transfer settles in about 267 s, inside the 300 s cap | restore, Ready, one fresh tx |
-| W4 | R2c: `fabric` stops BI plus one bank | 120 s | scale back | a transfer is refused (accepted, aligned) | restore, Ready, one fresh tx |
+| W2 | R2a: `fabric` stops ONE bank's endorsing pod (not BI), e.g. `rd-fabricx-bank-b` | until the Expected checks are read (state, no fixed time) | scale back | `rd-transfer` and `dvp` between the other two parties still settle | restore, pod Ready, one fresh tx |
+| W3 | R2b: `fabric` stops BI's endorsing pod | until the Expected checks are read (state, no fixed time) | scale back | a transfer settles (`event: result`; the 300 s Envoy route cap and 745 s `txDeadlineMs` are product limits, observed latency recorded) | restore, Ready, one fresh tx |
+| W4 | R2c: `fabric` stops BI plus one bank | until the Expected checks are read (state, no fixed time) | scale back | a transfer is refused (accepted, aligned) | restore, Ready, one fresh tx |
 | W5 | R3 forced failure: `fabric` makes one action of a dvp tx invalid (named in the word request) | one attempt | none | the whole tx is rejected; both balances unchanged | none |
 The pod names and the stop method are named by `fabric` in each word request.
 
@@ -25,7 +25,7 @@ The pod names and the stop method are named by `fabric` in each word request.
 - Line: `L6 fabricx R1: PASS|FAIL`.
 
 ## 3. R2 (fabricx): ALIGNED, not exempt
-`R2a`: W2: `GET /api/network?model=fabricx` shows the stopped node `down`; the flow between the other two parties settles (`txHash`, balances of those two moved). `R2b`: W3: BI down, a transfer still settles (about 267 s, inside the cap; the Lensa tx deadline must be above that `[unverified: adapter.txDeadlineMs]`). `R2c`: W4: refused, `event: error` quoted. Lines: `L6 fabricx R2a|R2b|R2c`.
+`R2a`: W2: `GET /api/network?model=fabricx` shows the stopped node `down`; the flow between the other two parties settles (`txHash`, balances of those two moved). `R2b`: W3: BI down, a transfer still settles (`event: result`; observed latency recorded; the route cap and Lensa `txDeadlineMs` are product limits `[unverified: adapter.txDeadlineMs]`). `R2c`: W4: refused, `event: error` quoted. Lines: `L6 fabricx R2a|R2b|R2c`.
 
 ## 4. R3 (fabricx): ALIGNED
 - `R3-happy`: `dvp` in W1: one tx, two actions: A DFABI -1 and RD +1,000,000; B +1 and -1,000,000.
