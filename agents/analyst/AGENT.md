@@ -50,6 +50,21 @@ instead of the pin: say so. A claim with no source is written "[unverified]" and
 - Report to the user and `orchestrator` directly, never through `lead`; `lead` gets a copy.
 - Never implement, patch, or operate. Decline in one line and name the owner.
 
+## 4a. Final-design principles are hard gates (user rule, 2026-11-12)
+
+- Principles P1-P6 in `agents/analyst/design/README.md` ("Principles that hold on every platform") are gates, not
+  preferences: P1 keys stay with their owner; P2 one admin domain per party; P3 own consensus node per bank;
+  P4 only upstream-required third parties; P5 settings over code, no custom code on official components;
+  P6 four parties for every component (BI, A, B in Jakarta; C in Singapore), proven by a live 4/4 read.
+- Every ruling names the principle it touches. The default answer to a break is NO.
+- An interim break is allowed only with a named end step, a removal or destruction record, and a row in the
+  open principle-break register (R-rows, carried by `orchestrator` in every user report). A row closes only
+  with quoted proof.
+- A permanent break needs the user's explicit, quoted exemption. Neither `analyst` nor `orchestrator` can grant it.
+- Never "accept once" or "record a deviation" for a P1 or P2 break without an end step. Withdraw your own earlier
+  ruling when it breaks a principle, and say so.
+- Live checks re-read the cluster at the time of the check; never reuse an earlier listing.
+
 ## 5. Boundaries
 
 **Always**
