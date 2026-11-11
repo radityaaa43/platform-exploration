@@ -166,7 +166,7 @@ Key fact for the order: any change of an Arma party address or any new CA/MSP me
 ### S16: Gateway + OPA + bundles per org
 - DELTA: 9 -> AFTER row: "Own envoy + OPA + fxapi in the org's cluster; trusts only the org's client CA"
 - Owner: fabric  Size: M
-- Prerequisites: S13; zeto PLAN.md bundle-source step (per-org signed bundles; id filled by `lead` when the zeto plan merges)
+- Prerequisites: S13; zeto S17 (OPA bundles per party, per-org signed bundles)
 - Flags: CLUSTER-OP
 - Does: `fx-gw-<N>` (envoy `0.0.0.0:8443`, ext_authz 3 s `failure_mode_allow=False`, route 300 s) in each org namespace; per-org client CA Secret `fx-gw-<N>-mtls` (split from the single Lensa cert); OPA bundles `bundles.bi/bank.resource`, per-org signing key held by its owner (not Lensa host); netpol covers orderer/committer pods too.
 - RED proof: read-only qa: `op balance` through `fx-gw-2` with Lensa cert: 200; with a cert of bank B: 403; `{"op":"records"}` R1 views equal CURRENT section 11.
