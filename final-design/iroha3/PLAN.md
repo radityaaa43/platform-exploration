@@ -94,6 +94,7 @@ Peer keys and addresses come before the nodes (genesis needs `pop_hex` and the p
 - Sources: `iroha@071e281e:crates/iroha_config/src/parameters/user.rs:844-857,7840-7852`; `crates/iroha_core/src/peers_gossiper.rs:308-318,944-958,1379`; analyst file section 2a ("bank-C address must be reachable from cluster 1 (LB or NodePort: our choice)")
 
 ### S7: Peers BI, A, B on cluster 1
+- RECORD (2026-11-11 ~23:30 CST host clock): S7a bi (Secret peer-bi + immutable ConfigMap genesis-58b7d7c4) was written minutes before the orchestrator's "decode the artifact first" condition reached the engineer (crossed messages): process slip, content per the approved text, objects KEPT. Accepted recorded risk: the signed genesis (expected_hash 58B7D7C4…) could not be decoded offline within the 15-minute time-box [update if a decode was found]; the manifest rows (holders, epoch 2^60, roster, lane stake once, 12 lane validators) are proven by scripts/test-s5.sh on the same merged code; the chain is new and empty; the cluster HOLD check after S7b is the real proof; a wrong genesis = re-genesis of the new namespaces (bi objects deleted on the orchestrator's word). Future genesis: the assembly keeps the unsigned manifest next to the signed file.
 - DELTA: 3 -> AFTER row: "own STS, PVC, Secret `peer-<party>`"
 - Owner: iroha  Size: L
 - Prerequisites: S1, S4, S5
