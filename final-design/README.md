@@ -30,6 +30,8 @@ The old namespace `kaleido` was not created by this project and is not read (zet
 
 ## Cross-platform order
 
+Superseded for execution by the Implementation schedule below (user directive 2026-11-11); the order here remains the dependency reference.
+
 Each PLAN.md is self-contained; this is the order in which `lead` would ask for the CLUSTER-OP approvals, so that shared items settle once and the cheapest proof of the topology comes first.
 
 1. **Shared ground (all platforms, cluster 1 then cluster 2).** Create the 20 namespaces with default-deny NetworkPolicies and per-namespace RBAC/ServiceAccounts; no workloads yet. Proof: `kubectl get ns,netpol -n <ns>` per namespace. Cluster 2 first write = namespaces only.
@@ -41,6 +43,32 @@ Each PLAN.md is self-contained; this is the order in which `lead` would ask for 
 7. **Decommission** (last step of every PLAN.md, cluster 1 only): only after qa PASS on the new namespaces for every flow + BI-balance proof, nothing in Lensa, `lensa-pf@*`, the OPA bundle server or CI still points at the old namespace (LENSA.md "Namespace references"), and surviving chain data snapshotted with a named backup. Reclaim policies on cluster 1 (quoted in each CURRENT.md decommission section): `fabricx` 28 PVs Delete, `iroha3` 6 PVs Delete, `paladin` 4 Postgres PVs Delete, `dfabi` 2 PVs Delete, `besu` 4 validator PVs Retain (Retain is not a backup: the disk stays and is released by hand). Deleting a PVC or a namespace with a Delete PV destroys the disk: an explicit retain or copy step precedes any delete. Destructive, user-only, own CLUSTER-OP approval at that time; rollback = none after delete, the named backup is what would be restored.
 
 Cluster 2 sequencing inside each platform follows the analyst's capacity note (`agents/analyst/design/README.md`, "Deployment topology"): Besu + Paladin + gateways, then Iroha, then the Fabric-X party.
+
+## Implementation schedule (parallel tracks, layered)
+
+User directive 2026-11-11. Tracks: zeto+noto-pente (owner `besu`; one shared Paladin node per bank, decision 24 option A), stealth (`besu`), iroha3 (`iroha`), fabricx (`fabric`). `fe` works the Lensa relay and per-bank pointers across all tracks; `qa` runs VERIFY per step; `analyst` reviews. Every PLAN.md step id sits in exactly one layer; a step that does not fit keeps its plan order inside the track and carries "(plan order)". Flags are copied from PLAN.md: C = CLUSTER-OP, U = user-only, $ = spend, D = destructive, B:x = BLOCKED(x). A B: flag whose decision row above is "decided" (13, 15, 19) clears when that PLAN is amended.
+
+| Layer | zeto+noto-pente (besu) | stealth (besu) | iroha3 (iroha) | fabricx (fabric) | fe | GO bundling |
+|---|---|---|---|---|---|---|
+| L0 namespaces + credentials + NetworkPolicies | zeto S1(C U), S2(C U $; two GOs) | S1(C U), S2(C U) | S1(C; S1a ns + S1b RBAC/deny-all, two GOs), S4(U C), S9(C; plan order, after S8) | S1(C), S2, S3, S8(B:lifecycle-policy C), S9(B:orderer-placement C) | - | GO #1 = zeto S1 only (given); GO #1b requested = stealth S1 + iroha3 S1a/S1b + fabricx S1 (cluster-1 part); cluster-2 namespaces (zeto S2, stealth S2, iroha3 S1a cluster-2 sub-step, fabricx S1 cluster-2 sub-step) = one separate GO |
+| L1 network chain (validators / peers / orderer+committer, bank C on cluster 2, LBs) | zeto S3(C $ U), S4(C $; cluster 2), S5a(C) | S3(U; proof only, done by zeto S3-S5) | S2, S3, S5(U), S6(C $), S7(C), S8(C U; cluster 2) | S6(C), S7(U; plan order), S10(B:orderer-placement U C), S11(B:orderer-placement C), S12(C), S18(B:orderer-placement C $; cluster 2) | - | one GO per layer across tracks when independent (zeto S3 + iroha3 S6/S7 + fabricx S10-S12), one PRE/VERIFY/ROLLBACK block per track; cluster-2 steps (zeto S4, iroha3 S8, fabricx S18) each their own GO |
+| L2 privacy/domain (Paladin nodes + registry, Stealth RPC nodes, APS auditors) | zeto S6(C U), S7(B:seed-rotation U), S8(C $ U), S9(C U), S10(C $), S11(B:registry-rootless U), S12(B:proving-key U), S15; noto-pente S1(qa, read-only; plan order, first), S2(C), S4(none), S5(B:registry-rootless U C), S6 | S4(C $ U), S5(C $ U; cluster 2), S6(qa, read-only), S7(C $ U), S8(code, no cluster), S9(C U), S10(C U), S11(C U), S16(C; optional, plan order) | S10, S11(C), S12(B:auditor-orgs-2-3 C) | S13(C) | - | bundle zeto S6/S8/S9 + stealth S7/S9-S11 only per the besu serialisation line; zeto S9 cluster-2 CRDs and S10 cluster-2 LB, stealth S5 = separate GOs |
+| L3 contracts + tokens (CONTRACTS.md target state) | zeto S13(B:Atom.cancel U), S14; noto-pente S8(code; fe sub-step) | S12(B:custodian C U), S13(B:DFABI-cert C U), S14(B:RD-issuer U; plan order, after S20/S21), S15(C U D; plan order, after S21) | S13(C B:auditor-orgs-2-3), S15(C) | S14(C), S15(C) | - | one GO per layer where independent; stealth S14/S15 and any live-flow write under the flock = own GO |
+| L4 gateways + OPA + bundles | zeto S16(C $), S17(C $); noto-pente S10(C) | S17(C $) | S14(C $) | S16(C), S17(C; plan order) | - | one GO per layer; cluster-2 listeners/LBs (gateways on bank C) separate |
+| L5 Lensa relay + per-bank pointers | zeto S18(B:bank-side-DvP U; plan order); noto-pente S11 | - | S17(B:leg-exchange; plan order) | - | zeto S19, S20; noto-pente S12(C; host restart); stealth S18, S19; iroha3 S16(C; dvp-shared part B:leg-exchange); fabricx S4, S19(C; lensa.service restart) | every Lensa touch or restart = own GO, at most one Lensa restart window per day |
+| L6 qa cutover proof | zeto S21(C U; window); noto-pente S3(C), S7(C), S9, S13(C), S14(B:Atom.cancel-BI-down U C) (all plan order, after zeto S21) | S20(C U; window) | S18(C) | S20(C) | - | one GO per track and cutover window; windows set by decision 30 |
+| L7 decommission | zeto S5b(U C D), S22(U C D); noto-pente S15(U C D) | S22(U C D) | S19(U C D) | S5(U C D), S21(B:retire-multiregion U C D), S22(U C D) | stealth S21(U D) | separate GO per step, always; named backup first |
+
+**Besu serialisation.** besu order: L0 both tracks in one GO (zeto S1 + stealth S1, then S2 cluster-2 ns for both); L1 zeto first (S3 -> S4 -> S5a), stealth S4/S5 RPC nodes (L2) right behind zeto S3 (they dial the zeto besu-p2p addresses); L2 zeto first (S6, S8 -> S9 rehearsal -> S10 -> S11), stealth S7/S9/S10/S11 after; stealth S8 (signer code, no cluster) in a worktree from day 1; noto-pente follows zeto on the same node (decision 24 A). Critical path to the first cutover (zeto S21): S1 -> S3 -> S2 -> S4 -> S5a -> S6+S8 -> S9 (rehearsal, freeze, pg_dump of the sidecar DB, zero pending txs) -> S10 -> S11 (ADR 0001, user) -> S16 -> S17 -> S19/S20 (fe) -> S21; user-blocked on that path: cluster-2 credential (S2), ADR 0001 (S11), Postgres product (S8), seed custody (S6), maintenance window (S21). Stealth steps that share a zeto window without touching the old stacks: S1/S2 with zeto S1/S2; S4/S5 after zeto S3/S4; S7 with zeto S8; S9/S10/S11 with zeto S9-S11.
+
+**Rules**
+- Tracks advance independently. A CLUSTER-OP GO request may bundle the same layer across tracks when the steps are independent (one PRE/VERIFY/ROLLBACK block per track), so the user gives one GO per layer where safe.
+- Separate GOs always for: anything on cluster 2, anything touching the running old stacks or Lensa, decommission.
+- Limits: 2 subagents per agent; host memory; cluster-1 nodes member-16033 (97% CPU requests) and member-16034 are excluded from new Besu/Postgres pods; the flock; at most one Lensa restart window per day.
+- besu owns three tracks (zeto, noto-pente, stealth): see the besu serialisation line above.
+
+**Status line format** (one line per track in the hourly report): `<track>: L<n> S<id> waiting on <GO|PR|review|nothing>`
+- `zeto+noto-pente: L2 S9 waiting on GO` / `stealth: L0 S1 waiting on PR` / `iroha3: ...` / `fabricx: ...`
 
 ## Shared items that every plan references
 
