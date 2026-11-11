@@ -7,7 +7,7 @@ Deciders: user
 Namespaces `fabricx-bi`, `fabricx-bank-a`, `fabricx-bank-b`, `fabricx-bank-c` exist (CURRENT.md section 1; not read inside by the study). The analyst read them live: label `part-of=fabricx-multiregion`, PSS `restricted`, `default-deny-all` plus `token-*-access-v2` netpols, per org a committer pod and an orderer pod, `token-endorser-v2`, `token-owner-v2`, BI also `token-issuer-v2`, `token-auditor-v2`, `console-web`; bank-c has Services and `default-deny-all` only (ARCHITECTURE 2.4). Lensa does not use them (LENSA.md section 6; `opa/DESIGN.md:18-20` is stale, see CURRENT.md section 12). No repo manifests exist; digests are unpinned; the `*-v2` token app has an auditor, which contradicts the R2 choice. CURRENT.md lists all four on cluster 1; the lead's brief names `fabricx-bank-c` as a cluster-2 namespace: [unverified] which cluster holds it. Cluster-2 namespaces are foreign and are never touched by this project.
 
 ## Decision
-Left to the user.
+Left to the user. Precondition: the user confirms these namespaces are this project's (TEAM.md section 4: never delete another team's resources); creation history [unverified].
 
 ## Alternatives Considered
 - Retire the stack, keep it as pattern source (analyst recommendation). Pros: frees pods, PVC slots and memory on cluster 1; removes a stack with an auditor that contradicts R2. Cons: destructive; no manifests, so it cannot be recreated; its creator and purpose are unknown [unverified].
