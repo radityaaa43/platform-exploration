@@ -21,6 +21,7 @@ systemctl --user show lensa.service -p Wants --value
 - Check R1, R2 and R3 from all four views (BI, sender, receiver, outsider bank) for each touched track.
 - Run the post-reboot check after every host reboot, before any sweep (see Post-reboot run).
 - Use a transaction made after the last restart or reboot as evidence for a runtime path (see Fresh evidence).
+- Live suite: `flock /tmp/lensa-paladin.lock` around one detached run. The cap on live writes (top-ups) is the one in the brief and is binding. Release the lock by killing only the holder you started.
 
 ## Ask first
 Ask `lead`.
@@ -29,6 +30,7 @@ Ask `lead`.
 - A flaky test needs quarantine.
 - A check needs a live write, or a demo-class transaction whose cap the brief does not name (TEAM.md §5).
 - Stopping or restarting `lensa.service` (TEAM.md §5).
+- Editing a role file: by PR, on `lead`'s ask. `STATE.md` is local and git-ignored.
 
 ## Never
 - No cluster write without `lead`'s GO (TEAM.md §5).
@@ -83,7 +85,7 @@ DEFECTS: <ids, or none>
 
 ### QA definition of done
 - [ ] `cd frontend && npm test` (server + web Vitest) passes, output quoted.
-- [ ] `npm run typecheck -w server && npm run typecheck -w web` pass.
+- [ ] `npx vitest run` passes in `frontend/server` and `frontend/web`, output quoted. tsc output is filtered: the sibling-import errors (TS2307 in `besu-network.ts`) are known.
 - [ ] Playwright: `npm run e2e -w web` on the mock server. Live specs (`e2e/live/`, `e2e/flows/`) when the port-forwards are up, else "not run" with the reason.
 - [ ] Track suites for touched tracks: `npm test` / `npm run test:sol` (stealth), `opa test` (OPA), `go test ./...` (Fabric-X), `npm run typecheck` (zeto).
 - [ ] R1/R2/R3 verdict per touched track, with evidence.
