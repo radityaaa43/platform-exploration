@@ -6,7 +6,7 @@ Run rule (TEAM.md section 11): the live proof runs once per platform, only after
 
 ## 1. Entry gate (read-only)
 1. Every layer L0-L5 is applied on both clusters: re-read each with the track's `VERIFY.md` GREEN commands and `python3 -I final-design/verify/verify.py <track> S1`. A RED row: stop, report PARTIAL "not ready".
-2. Served build: `git -C frontend rev-list --count HEAD..origin/main` = 0 and `systemctl --user show lensa.service -p ActiveEnterTimestamp` is later than the last checkout update; else "stale build", no Lensa run.
+2. Served build: `git -C frontend rev-list --count HEAD..origin/main` = 0 and `systemctl --user show lensa.service -p ActiveEnterTimestamp` is later than the last checkout update; else "stale build", no Lensa run. For the S21 (zeto, noto, pente) layer 7 the served sha must equal the fix sha `41607a7f173b477fea7977c8bc7b04cdae5b2115` (rd-lensa-frontend #54): `git -C frontend rev-parse HEAD`; and `GET /api/history?model=noto&party=BI|A|B|C&limit=1` is HTTP 200 for all four (a 503 warming-up is not ready). Either red: stop at the gate, report PARTIAL "not ready".
 3. `env -u KUBECONFIG ROOT=$PWD bash agents/ops/post-reboot-check.sh` with `NAMESPACES` set to the platform's live set: `rc=0`, no `FAIL`.
 4. `curl -s http://127.0.0.1:8790/api/meta`: `models.<model>.available` is true and `capabilities.<flow>.enabled` is true for every flow in the plan; else that flow is `NOT-RUN` with the quoted `reason`.
 5. Preconditions per platform are in section 0 of each file. Known now: Zeto cutover S21 not done; Fabric-X token namespace S14 not done; the Iroha idle chain stays at height 1 until the first Lensa or qa tx. An unmet precondition gives `NOT-RUN`, never FAIL.
@@ -67,3 +67,14 @@ No fixed-duration wait, soak, observation window, countdown or sleep loop in any
 - Removal (S21 C1 form): one read and one immediate re-read, identical: old operator `0/0`, old sts `0/0`, old pod `NotFound`.
 - Liveness: block height read, then re-read until it has risen (event wait); an idle Iroha chain makes no block without a tx, so the rise needs a tx.
 Kept, because they are product runtime features and not work pauses: per-request connect timeouts, probe periods, the Envoy 300 s route cap and Lensa `txDeadlineMs`, the `stealth-viewkey-compare` CronJob schedule, TLS/session expiries.
+
+## 9. P-check and open R-rows (hard gates, user order via the analyst 2026-11-12)
+Design principles P1-P6 (`agents/analyst/design/README.md` principles 1-6) are hard gates, with the open break register R1-R13 in `agents/qa/REGISTER.md`. Every platform run quotes, in its verdict: (a) a P-check line per principle (section 10 of the platform file), and (b) its OPEN R-rows, each with the state read now. Rules: an open row makes the platform verdict PARTIAL unless `lead` accepts it in writing (the acceptance is quoted); a row closes only with a quoted proof line (`agents/qa/REGISTER.md` lists the read-only lines); qa never closes a row on its own word or on a peer message. A P-check FAIL is FAIL, not PARTIAL.
+P-check template (read-only; names and modes only, no Secret value ever read):
+- P1 keys with their owner: D3 plus the host: `ls -l ~/.opa-keys ~/.opa-sink-tokens ~/.opa-mtls-party` (names, modes); keys of a party exist only in that party's namespace; Lensa state files carry no key fields.
+- P2 one admin domain per party: D4; `stat -c '%a %n'` of every kubeconfig on the Lensa host (a cluster-admin file there = R1/R11 open); no cross-namespace `can-i get secrets`.
+- P3 own consensus node: the consensus row of the 4/4 matrix.
+- P4 only upstream-required third parties: list every component in the platform's namespaces that is not one of the four parties' own; each must be on the platform's cited list (section 10); anything else is FAIL.
+- P5 settings over code: image refs of the platform's pods (`kubectl get pod -o jsonpath='{..image}'`) are the pinned upstream images or the accepted fork digest named in the PLAN; an unpinned or unknown image is FAIL.
+- P6 four parties on every platform, every component: section 8, the 4/4 matrix.
+Line: `L6 <platform> PCHECK P1..P6: <PASS|FAIL each>`; `L6 <platform> OPEN-R: <R-ids with state>`.

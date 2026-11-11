@@ -39,3 +39,8 @@ Same D1-D4 as `zeto.md` section 7 (the nodes are shared with Zeto) plus: `D-nota
 
 ## 8. Four-of-four matrix (`L6-COMMON.md` section 7; run first)
 Noto and Pente run on the same per-party nodes as Zeto: quote the Zeto matrix cells (Paladin node, Postgres, keys, gateway + OPA, bundle server, consensus node) for `rd-zeto-<p>`, plus per party: the notary key Secret only in `rd-zeto-bi` (BI is the notary, so that one is 1 cell, not 4, and is recorded as the design), and one Pente group member per bank (names only). Placement as Zeto. Line `L6 noto 4OF4`.
+
+## 10. P-check / open R-rows (`L6-COMMON.md` section 9; register `agents/qa/REGISTER.md`)
+- P1: D3 + host key listing; P2: D4 + kubeconfig modes; P3: consensus row of section 8; P5: image refs vs the pins in `final-design/noto-pente/PLAN.md`; P6: section 8 matrix.
+- P4 allowed third parties (cited, everything else FAIL): the Noto notary (BI) and Pente 100% group endorsement (each group `{one bank, BI}`).
+- Open R-rows for this platform: R1, R7, R9, R11 (as Zeto: the nodes are shared). `L6 noto-pente OPEN-R` quotes each with its state read now; any open row = PARTIAL unless `lead` accepts it in writing.
