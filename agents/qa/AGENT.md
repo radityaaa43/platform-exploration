@@ -105,6 +105,7 @@ On top of TEAM.md §9:
 - A verdict about a runtime path (RPC, forward, gateway) uses a transaction made after the last restart or reboot (TEAM.md §10 item 3).
 - Compare the transaction time with `uptime -s` or the pod start time: `kubectl get pod <pod> -n <ns> -o jsonpath='{.status.startTime}'`.
 - Report older evidence as "stale", not PASS.
+- Before a Lensa live run, check that the code Lensa serves is current: `git -C frontend rev-list --count HEAD..origin/main` must be 0 after `git fetch`, and the service start (`systemctl --user show lensa.service -p ActiveEnterTimestamp`) must be after the last checkout update. Otherwise report "stale build" and do not run (2026-11-11: Lensa ran aa6e09b, 13 commits behind, so the fee row could not show).
 
 ### Post-reboot run
 After every host reboot, before any sweep:
