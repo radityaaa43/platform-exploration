@@ -25,3 +25,5 @@ Gotchas learned in the L0 windows:
   qa only reads the pod logs. Valid lines: `OPEN` / `BLOCKED` (timeout). `REFUSED`, `ERROR`, `DNS-FAIL` are not results.
 
 Only `S1` exists; add a step by adding a check function and a row in the VERIFY.md of that track.
+
+L6 cutover plans (one end-to-end run per platform after L0-L5, `qa`): `L6-COMMON.md` (rules, Lensa API calls, templates), `zeto.md`, `noto-pente.md`, `stealth.md`, `fabricx.md`, `iroha3.md`. Live proof runs only after `lead` says "platform X ready for qa".
