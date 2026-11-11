@@ -12,7 +12,7 @@ Parties: `rd-stealth-bi`, `-bank-a`, `-bank-b` (cluster 1), `-bank-c` (cluster 2
 | W | Action | Duration | Restore | Expected | Rollback |
 |---|---|---|---|---|---|
 | W1 | qa runs the 6 flows under the flock (`POST /api/tx`, model `stealth`, demo amounts, cap from the brief) | about 6 txs | none | `6 passed`; `BI-DELTA stealth ...: PASS` | none possible (append-only) |
-| W2 | R2: `besu` stops the DFABI certificate signer in `rd-stealth-bi` (pod name from S10 `[unverified]`) | 300 s | scale back | RD transfer, `settle()`, `cancel()` work; a DFABI transfer is refused (GAP) | restore, signer Ready, one fresh DFABI tx |
+| W2 | R2: NOT-RUN until S10 (the BI signer code does not exist yet): then `besu` stops the DFABI certificate signer in `rd-stealth-bi` (pod name from S10 `[unverified]`) | 300 s | scale back | RD transfer, `settle()`, `cancel()` work; a DFABI transfer is refused (GAP) | restore, signer Ready, one fresh DFABI tx |
 | W3 | R3 forced failure: let one dvp expire, then `cancel()` by a non-party (`besu` runs it) | one attempt | none | both balances unchanged | none |
 | W4 | D-tail: `besu` stops `besu-rpc-0` in `rd-stealth-bank-a` only | 120 s | scale back | bank-b and BI keep reading and sending; bank-a's reads fail | restore, Ready, block height within 2 |
 
@@ -23,7 +23,7 @@ Parties: `rd-stealth-bi`, `-bank-a`, `-bank-b` (cluster 1), `-bank-c` (cluster 2
 - Detective: a bank re-registering a new viewing key blinds BI (A:133); the S11 compare job is the check. `L6 stealth R1: LIMIT <evidence>`.
 
 ## 3. R2 (stealth): LIMIT for DFABI
-Before: signer Ready, `GET /api/network?model=stealth`. During W2: `POST /api/tx` `rd-transfer` A to B ok; `dfabi-transfer` A to B refused with the quoted `reason`. After: a fresh `dfabi-transfer` ok. `L6 stealth R2: LIMIT RD ok, DFABI refused while signer down`. Blocked until ADR 0002: `NOT-RUN`.
+Before: signer Ready, `GET /api/network?model=stealth`. During W2: `POST /api/tx` `rd-transfer` A to B ok; `dfabi-transfer` A to B refused with the quoted `reason`. After: a fresh `dfabi-transfer` ok. `L6 stealth R2: LIMIT RD ok, DFABI refused while signer down`. `NOT-RUN` until S10 (signer code) and ADR 0002 land.
 
 ## 4. R3 (stealth): ALIGNED
 - `R3-happy`: `dvp` in W1: A DFABI -1, RD +1,000,000; B +1, -1,000,000; one `settle()` tx.
