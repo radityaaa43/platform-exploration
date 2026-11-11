@@ -112,6 +112,7 @@ Reused by noto-pente and stealth: S1-S5 (namespace pattern, validator per bank),
 - Sources: paladin@v1.0.0:operator/charts/paladin-operator/values.yaml:204-206, operator/cmd/main.go:98,108,211-221; CURRENT sections 2-3 (live CR, domains); `besu@9890701:zeto/ops/backup-pld-node1-1792061433.yaml:6` (CR shape).
 
 ### S10: Cross-cluster Paladin transport endpoints
+- DEVIATION (rd-besu #36 795a1d0, server dry-run 2026-11-12): the Paladin CRD requires `transports[].tls.certName` next to `secretName`; the CR sets both to `paladin-node<N>-mtls` with no issuer, and the Secret must exist BEFORE the CR apply (the operator creates a Certificate only when the Secret is missing, paladin_controller.go:1352-1360). Transport endpoint = the node's own LB IP (`externalHostname`), cert CN `node<N>`, own CA per node; Jakarta-to-Jakarta traffic short-circuits in-cluster via kube-proxy, so the LB ACLs admit only the other cluster's egress (design answer accepted 2026-11-12; tls_verifier.go:138-195 checks CN + registry issuers only). Service `paladin-transport` externalTrafficPolicy Cluster explicit; 100.64 element only after the ACL is verified; probes (probe-listener/probe-client) run after S10b and before S21.
 - DELTA: 4 -> AFTER row: "gRPC mTLS across clusters, directCertVerification"
 - Owner: besu  Size: M
 - Prerequisites: S9
