@@ -24,7 +24,7 @@ echo "LISTEN 0 128 127.0.0.1:$p 0.0.0.0:*"
 C
 cat > "$t/bin/kubectl" <<'C'
 #!/bin/bash
-ns=$4; f="$FAKE_PODS/$ns.json"; [ -f "$f" ] || { echo "The connection was refused" >&2; exit 1; }; cat "$f"
+echo "${KUBECONFIG:-}" > "$FAKE_PODS/kc.log"; ns=$4; f="$FAKE_PODS/$ns.json"; [ -f "$f" ] || { echo "The connection was refused" >&2; exit 1; }; cat "$f"
 C
 chmod +x "$t/bin/"*
 echo '{"items":[{"metadata":{"name":"p1"},"status":{"phase":"Running","conditions":[{"type":"Ready","status":"True"}]}},{"metadata":{"name":"job1"},"status":{"phase":"Succeeded","conditions":[{"type":"Ready","status":"False"}]}}]}' > "$t/pods/ns1.json"
@@ -33,7 +33,7 @@ echo "$good" > "$t/www/api/health"
 python3 -I -u -m http.server 0 --bind 127.0.0.1 -d "$t/www" > "$t/srv.log" 2>&1 & srv=$!
 for _ in $(seq 50); do port=$(grep -o 'port [0-9]*' "$t/srv.log" | head -1 | cut -d' ' -f2); [ -n "$port" ] && break; sleep 0.1; done
 
-run() { env PATH="$t/bin:$PATH" FORWARDS="$t/forwards.conf" NAMESPACES="ns1" HEALTH_URL="http://127.0.0.1:$port/api/health" \
+run() { env -u KUBECONFIG ROOT="$t/noroot" PATH="$t/bin:$PATH" FORWARDS="$t/forwards.conf" NAMESPACES="ns1" HEALTH_URL="http://127.0.0.1:$port/api/health" \
   FAKE_WANTS="lensa-pf@alpha.service lensa-pf@beta.service other.service" FAKE_PODS="$t/pods" "$@" bash "$here/post-reboot-check.sh"; }
 fail=0
 check() { # name, expected exit, grep pattern, env...
@@ -56,5 +56,11 @@ check failed-job-pod-ignored 0 '^PASS pods ns1' FAKE_INACTIVE= FAKE_DOWN_PORTS=
 echo '{"items":[{"metadata":{"name":"dead-0","ownerReferences":[{"kind":"ReplicaSet"}]},"status":{"phase":"Failed"}}]}' > "$t/pods/ns1.json"
 check failed-nonjob-pod 1 '^FAIL pods ns1.*dead-0' FAKE_INACTIVE= FAKE_DOWN_PORTS=
 rm "$t/pods/ns1.json"
-check kubectl-error 1 '^FAIL pods ns1' FAKE_INACTIVE= FAKE_DOWN_PORTS=
+check kubectl-error 1 '^FAIL pods ns1.*check KUBECONFIG' FAKE_INACTIVE= FAKE_DOWN_PORTS=
+echo '{"items":[]}' > "$t/pods/ns1.json"
+touch "$t/alibaba.yaml"
+check kubeconfig-default-from-root 0 "^INFO kubeconfig $t/alibaba.yaml\$" FAKE_INACTIVE= FAKE_DOWN_PORTS= ROOT="$t"
+grep -qx "$t/alibaba.yaml" "$t/pods/kc.log" && echo "ok   kubectl-got-default-kubeconfig" || { echo "FAIL kubectl-got-default-kubeconfig"; fail=1; }
+check kubeconfig-env-wins 0 '^INFO kubeconfig /my/own.yaml$' FAKE_INACTIVE= FAKE_DOWN_PORTS= ROOT="$t" KUBECONFIG=/my/own.yaml
+check kubeconfig-none 0 '^INFO kubeconfig kubectl default$' FAKE_INACTIVE= FAKE_DOWN_PORTS=
 exit $fail

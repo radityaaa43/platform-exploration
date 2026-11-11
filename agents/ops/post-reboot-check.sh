@@ -1,9 +1,10 @@
 #!/bin/bash
 # Post-reboot check (TEAM.md §10 item 1). READ-ONLY: no restart, no enable, no write.
 # One line per item: "PASS|FAIL <item> <detail>". Exit 1 if any FAIL.
-# Env (all optional): FORWARDS (forwards.conf path), NAMESPACES, HEALTH_URL, PLATFORMS. KUBECONFIG comes from the env and is never printed.
+# Env (all optional): FORWARDS (forwards.conf path), NAMESPACES, HEALTH_URL, PLATFORMS, ROOT.
+# KUBECONFIG: used as set; if unset, $ROOT/alibaba.yaml when it exists. Only its path is printed (INFO line), never its content.
 set -u
-root=$(cd "$(dirname "$0")/../.." && pwd)
+root=${ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}
 FORWARDS=${FORWARDS:-$root/frontend/deploy/forwards.conf}
 NAMESPACES=${NAMESPACES:-paladin iroha3 fabricx}
 HEALTH_URL=${HEALTH_URL:-http://127.0.0.1:${PORT:-8790}/api/health}
@@ -42,13 +43,15 @@ P
 ) && res PASS health "$out" || res FAIL health "$out"
 
 # 4. no pod NotReady (skipped: Succeeded pods and Failed pods of a finished Job)
+if [ -z "${KUBECONFIG:-}" ] && [ -f "$root/alibaba.yaml" ]; then export KUBECONFIG=$root/alibaba.yaml; fi
+echo "INFO kubeconfig ${KUBECONFIG:-kubectl default}"
 for ns in $NAMESPACES; do
   out=$(kubectl get pods -n "$ns" -o json 2>&1 | python3 -I -c '
 import json, sys
 try:
     items = json.load(sys.stdin)["items"]
 except Exception:
-    print("kubectl error"); sys.exit(1)
+    print("kubectl error, check KUBECONFIG"); sys.exit(1)
 done = lambda i: i["status"].get("phase") == "Succeeded" or (i["status"].get("phase") == "Failed"
        and any(o.get("kind") == "Job" for o in i["metadata"].get("ownerReferences", [])))
 bad = [i["metadata"]["name"] for i in items if not done(i)
