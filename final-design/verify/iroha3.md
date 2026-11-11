@@ -15,7 +15,7 @@ Parties: `rd-iroha3-bi`, `-bank-a`, `-bank-b` (cluster 1), `-bank-c` (cluster 2)
 | W0 | optional: `IROHA3_TOPUP=1` top-ups under the flock, cap from the brief | per top-up | none | payer holds one large note | none possible (append-only) |
 | W1 | qa runs the 6 flows under the flock (`POST /api/tx`, model `iroha3`; APS txs take minutes: `txDeadlineMs`) | about 6 txs | none | `6 passed`; `BI-DELTA iroha3 ...: PASS` | none possible |
 | W2 | R3 forced failure: `iroha` makes one bundle fail at prepare (named in the word request) | one attempt | none | the bundle settles neither leg; balances unchanged | none |
-| W3 | R2 observation only (platform is EXEMPT): `iroha` stops one peer pod (not BI) in `rd-iroha3-bank-b` | 120 s | scale back | a flow does not commit while the peer is down (accepted limit) | restore, peer `up` in `/api/network?model=iroha3`, one fresh tx commits |
+| W3 | R2 observation only (platform is EXEMPT): `iroha` stops one peer pod (not BI) in `rd-iroha3-bank-b` | until the Expected checks are read (state, no fixed time) | scale back | a flow does not commit while the peer is down (accepted limit) | restore, peer `up` in `/api/network?model=iroha3`, one fresh tx commits |
 
 ## 2. R1 (iroha3): ALIGNED protocol, GAP in Lensa
 - `R1`: `<T>` = the `rd-transfer` A to B of W1. Per party wallet reads through `GET /api/history?model=iroha3&party=A|B|BI|C`: A shows the sent row with `role sender` and `fee` "1" (the RD-leg payer pays the sponsor reimbursement); B shows the received row (`receiver`); BI shows both legs in its auditor store; C (outsider) has no item for `<T>`. Lenses: A, B, BI amount non-null and not `sealed`; C `amount: null`, `sealed`. `GET /api/receipt?...&party=C&tx=<T>` carries no private part.

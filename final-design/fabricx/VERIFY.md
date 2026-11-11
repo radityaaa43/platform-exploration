@@ -42,7 +42,7 @@ Status: re-checked against fd-fabricx 352f4da (analyst fix pass).
 
 ## R1/R2/R3 proofs (S20)
 - R1 (ALIGNED non-parties, BI detective only, A:145): mTLS `{"op":"records","txid":"<tx>"}` to each org gateway with the Lensa cert (C:91-96): BI and A both rows, B only its row, C exactly `{"records":[]}`. Playwright fabricx flows: outsider `sealed`, no `Rp`. The spending graph (input ids) is visible to ledger readers (A:170): recorded, not a FAIL.
-- R2 (ALIGNED, not exempt, A:142,146): any ONE other party down still settles; BI + one bank down stays refused; BI down: transfer ~267 s within the 300 s cap. Stops are NOT run by qa (cluster write; evidence = lead's window under the step's own CLUSTER-OP GO); qa verdict "from lead's window, not rerun".
+- R2 (ALIGNED, not exempt, A:142,146): any ONE other party down still settles; BI + one bank down stays refused; BI down: the transfer returns `event: result` (observed ~267 s, C:105; the 300 s route cap is a product limit). Stops are NOT run by qa (cluster write; evidence = lead's window under the step's own CLUSTER-OP GO); qa verdict "from lead's window, not rerun".
 - R3 (ALIGNED, A:147): one tx, two actions: after a dvp A and B balances moved exactly (-1 DFABI, +RD) and (+1, -RD); atomic by construction.
 
 ## Not testable by qa (reason)

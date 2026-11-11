@@ -12,9 +12,9 @@ Parties: `rd-stealth-bi`, `-bank-a`, `-bank-b` (cluster 1), `-bank-c` (cluster 2
 | W | Action | Duration | Restore | Expected | Rollback |
 |---|---|---|---|---|---|
 | W1 | qa runs the 6 flows under the flock (`POST /api/tx`, model `stealth`, demo amounts, cap from the brief) | about 6 txs | none | `6 passed`; `BI-DELTA stealth ...: PASS` | none possible (append-only) |
-| W2 | R2: NOT-RUN until S10 (the BI signer code does not exist yet): then `besu` stops the DFABI certificate signer in `rd-stealth-bi` (pod name from S10 `[unverified]`) | 300 s | scale back | RD transfer, `settle()`, `cancel()` work; a DFABI transfer is refused (GAP) | restore, signer Ready, one fresh DFABI tx |
+| W2 | R2: NOT-RUN until S10 (the BI signer code does not exist yet): then `besu` stops the DFABI certificate signer in `rd-stealth-bi` (pod name from S10 `[unverified]`) | until the Expected checks are read (state, no fixed time) | scale back | RD transfer, `settle()`, `cancel()` work; a DFABI transfer is refused (GAP) | restore, signer Ready, one fresh DFABI tx |
 | W3 | R3 forced failure: let one dvp expire, then `cancel()` by a non-party (`besu` runs it) | one attempt | none | both balances unchanged | none |
-| W4 | D-tail: `besu` stops `besu-rpc-0` in `rd-stealth-bank-a` only | 120 s | scale back | bank-b and BI keep reading and sending; bank-a's reads fail | restore, Ready, block height within 2 |
+| W4 | D-tail: `besu` stops `besu-rpc-0` in `rd-stealth-bank-a` only | until the Expected checks are read (state, no fixed time) | scale back | bank-b and BI keep reading and sending; bank-a's reads fail | restore, Ready, block height within 2 |
 
 ## 2. R1 (stealth): ACCEPTED limit
 - Public by design, recorded not FAIL: amount, token and sender address; the recipient is hidden (user 2026-11-10; Lensa view-key GAP).
