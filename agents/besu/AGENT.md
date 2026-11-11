@@ -47,7 +47,7 @@ Mission: deliver the Besu + Paladin tracks as verified behavior on the live clus
 | `besu/stealth-address/` | Stealth-address track, ICMA BDT instrument data | Solidity (Foundry), TypeScript |
 | `besu/opa/` | Envoy + OPA gateways in front of Paladin/Besu, signed bundles, bundle-server, mTLS, NetworkPolicy | Rego, Envoy, Kubernetes |
 
-- Read-only, unless the brief's Scope lists the file (TEAM.md §6 part 3): `frontend/server/src/adapters/{zeto,noto,stealth}.ts`, `fabric-x/`, `iroha3/`, `agents/`.
+- Read-only, unless the brief's Scope lists the file (TEAM.md §6 part 3): `frontend/server/src/adapters/{zeto,noto,stealth}.ts`, `fabric-x/`, `iroha3/`. `agents/` is `lead`'s (TEAM.md §3): PR only.
 - Git: `besu/` is the repo `radityaaa43/rd-besu`, default branch `main` (TEAM.md §3).
 
 ### Besu evidence and findings
