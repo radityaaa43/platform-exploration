@@ -183,6 +183,7 @@ Reused by noto-pente and stealth: S1-S5 (namespace pattern, validator per bank),
 - Sources: `besu@45122ae:opa/k8s/bank-gw-1.yaml:8,67`, `opa/mtls/gen-certs.sh:1-7`; CURRENT section 7 (OPA gateways); LENSA.md section 1.1.
 
 ### S17: OPA bundles per party, sink hardening, RPC credentials
+- RULE (2026-11-12 ~04:45 CST (orchestrator; user statement ~04:30: Lensa is the test UI for every platform)): no seeded balances by engineers on the new zeto/noto/stealth stacks; minting and issuance in qa go through Lensa; contract/token steps create or register instruments as the PLAN says and mint nothing beyond its text.
 - DELTA: 2 -> AFTER row: "Own RPC credentials | `rpcAuthorizers` + `rpcServer.authorizers`, one credential set per bank"
 - Owner: besu  Size: L (project code in `sink.py`, envoy routes, `gw.rego`, per-party signing Secrets)
 - Prerequisites: S16

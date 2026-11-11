@@ -148,6 +148,7 @@ Key fact for the order: any change of an Arma party address or any new CA/MSP me
 - Sources: panurus@5f3c49e2:integration/token/fungible/topology/topology.go:164-186; fabric-x k8s.py:74-75,200-207; CURRENT.md section 9. FSC routing docs: not opened
 
 ### S14: Token namespace `rd_dfabi_v2`, public params, issuance
+- DECIDED (2026-11-12 ~04:45 CST (orchestrator; user statement ~04:30: Lensa is the test UI for every platform)): NO seeded issuance by engineers. Only the namespace + public params step (policy OutOf(3, Org1..4MSP), 64-bit amounts, auditor list empty) runs under the standing GO after S13 + S16, with no amounts and no recipients written by us; issuance happens via Lensa in qa; the old balances do not carry over (README row 13). Seeded balances only if the user asks (amounts then come from the orchestrator).
 - DELTA: 7 -> AFTER row: "OutOf(3, Org1..4MSP.member)"; "Public params: issuer BI, no auditors"
 - Owner: fabric  Size: M
 - Prerequisites: S13, S16
