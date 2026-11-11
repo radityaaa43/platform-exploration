@@ -1,13 +1,13 @@
 # 0001. Stealth custodian party: BI or another party
 Date: 2026-11-11
-Status: proposed
+Status: accepted (user decision 2026-11-11, via orchestrator)
 Deciders: user
 
 ## Context
 One account today is issuer, DFABI owner, controller and minter, certificate signer, `DvPFactory` custodian and `InstrumentRegistry` owner (CURRENT.md sections 2 and 10). The AFTER says the custodian is not required to be BI; the roles that move are bond `owner`, minter, controllers, certificate signer and `DvPFactory.custodian_` (immutable, so a new factory instance; ARCHITECTURE-stealth.md section 2, DELTA 4; `besu@9890701:stealth-address/src/DvPFactory.sol:14-18,30-31`). The project brief gives the custodian every bank's view key (`docs/architecture-brief.md:59`). R1 says only BI, sender and receiver see a transaction, so a custodian that is not BI is a fourth viewer (hard limit 3). The custodian is also the online certificate signer for every DFABI transfer (hard limit 4, `architecture-brief.md:461`).
 
 ## Decision
-Left to the user. PLAN S12 stays BLOCKED(Stealth custodian party) until one option is chosen; S15 (retire the shared deployer key) waits on it.
+The DFABI cert-issuer custodian = BI (DELTA 4 decided). Accepted limit: the stealth spend key sits raw in the signer process memory (spend key + h), so Vault/HSM transit cannot hold it; Vault protects it at rest only (ARCHITECTURE-stealth :137, hard limit 6). PLAN S12 unblocked; S15 may follow.
 
 ## Alternatives Considered
 - (a) Custodian = BI party, with its own key separate from the RD issuer key. Pros: no fourth viewer, R1 unchanged, no new namespace; the third party stays BI, as in R2's current GAP. Cons: BI keeps force-transfer power (`isControllable` true) and certificate control; DFABI stays unavailable while the BI certificate signer is down. Why not: only if the user wants the custodian independent of BI.
