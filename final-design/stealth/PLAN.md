@@ -19,6 +19,7 @@ Shared with zeto (referenced by zeto S id, not repeated): validators and chain d
 - Owner: besu  Size: S
 - Prerequisites: zeto S1 (same pattern and the same user credential issue)
 - Flags: CLUSTER-OP, user-only (credential issue)
+- Role note (lead approval 2026-11-11, applied in rd-besu #14): `party-admin` also holds `batch` jobs/cronjobs verbs from S1 so that S11's CronJob and event-watch Job need no Role change; no other widening.
 - Does: create ns `rd-stealth-bi`, `rd-stealth-bank-a`, `rd-stealth-bank-b` (labels `part-of=rd-stealth`, `party=<bi|bank-a|bank-b>`); NetworkPolicy `default-deny-ingress`, `allow-dns-egress`, `allow-same-namespace`; ServiceAccount `party-admin` + namespace-scoped Role/RoleBinding. Egress stays open (Besu p2p, JWT RPC reads, cert requests need it).
 - RED proof: `kubectl get ns rd-stealth-bank-a` before `NotFound`, after `Active`; `kubectl -n rd-stealth-bank-a auth can-i get pods -n rd-stealth-bank-b --as system:serviceaccount:rd-stealth-bank-a:party-admin` -> `no`; `kubectl -n rd-stealth-bank-a get netpol -o name | wc -l` -> `3`.
 - Rollback: `kubectl delete ns rd-stealth-<x>` (empty at this point).
