@@ -14,7 +14,7 @@ Rule: a platform PASS lists its open R-rows. An open row makes the verdict PARTI
 | R4 | P2 | Fabric-X CA admin passwords of 4 orgs on one host | S15 + a password change per org at handover + host copy destroyed; blocks new uses | open |
 | R5 | P2 | Namespace-ceremony admin keys must never be co-located (any co-location falls under R4) | n/a: standing prohibition, checked at every ceremony | standing |
 | R6 | P1 | Fabric-X `ids/anon` creator key shared in every org pod | permanent on this channel; user exemption pending | open (exemption pending) |
-| R7 | P6 | Paladin 0/0, live 4 in old Jakarta | S21, with besu's g1 read: a new `paladin-node` per party Running in its own namespace and cluster, the old ones at 0 (does NOT wait for S5b; lead 2026-11-12) | open until S21 closes |
+| R7 | P6 | Paladin 0/0, live 4 in old Jakarta | S21, with besu's g1 read: a new `paladin-node` per party Running in its own namespace and cluster, the old ones at 0 (does NOT wait for S5b; lead 2026-11-12) | CLOSED 2026-11-12 (S21 attempt 3 layer 7 PASS): qa 4/4 read 05:17 CST (new `paladin-node1..4` 1/1 Running in `rd-zeto-{bi,bank-a,bank-b}` ap-southeast-5 and `rd-zeto-bank-c` ap-southeast-1; old ns `paladin` sts 0, operator 0) + besu's nested-key read 07:34 CST (every receipt on node4: domainReceipt keys states = EMPTY object); proof in `final-design/zeto/VERIFY.md` layer-7 record |
 | R8 | P6 | Stealth signer/gateway/OPA 0/4; Fabric-X `fx-gw`/OPA 0/4 + `rd_dfabi_v2`; Iroha gateway/OPA 0/4 + 2-of-3 auditors | stealth S8-S12; fabricx S14/S16; iroha S14 + S11-S13 | open |
 | R9 | P3, P6 | The QBFT validator set is 8 | S5b (user-only) | OPEN-PARKED |
 | R10 | P1 | Iroha `bi-gov` seed host backup | moved off-host, then shredded (user) | OPEN-PARKED |
