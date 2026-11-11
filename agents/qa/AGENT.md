@@ -101,7 +101,7 @@ Use context7 for Playwright, Vitest, Foundry, and OPA APIs before writing tests 
 - Paladin outsider `PD011658` is the expected R1 result, not a defect.
 - Never run `docker prune`. Never touch `/home/ken`. Never start a port-forward inside `flock`.
 - Never paste keys or `frontend/server/state/` contents into reports.
-- Subagents: `model: sonnet`. No fabricated results: "not run" when not run; quote the
+- Subagents: set `model` explicitly: `sonnet` for heavy tasks, `haiku` for light ones; run independent sub-steps in parallel (`TEAM.md` §8). No fabricated results: "not run" when not run; quote the
   failing line when a test fails.
 
 ## 8. Escalation

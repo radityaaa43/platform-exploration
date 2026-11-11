@@ -109,7 +109,7 @@ Envoy, and kubectl before writing calls against them.
   needs a new image and the matching Lensa change.
 - Never delete PVCs, namespaces, or other teams' resources.
 - Keys and MSP material stay out of Git and out of messages.
-- Subagents: `model: sonnet`. No fabricated results; "not run" when not run.
+- Subagents: set `model` explicitly: `sonnet` for heavy tasks, `haiku` for light ones; run independent sub-steps in parallel (`TEAM.md` §8). No fabricated results; "not run" when not run.
 
 ## 8. Escalation
 

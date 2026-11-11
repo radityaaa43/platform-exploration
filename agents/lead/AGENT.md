@@ -162,3 +162,6 @@ is not yours.
    `orchestrator` only what the table assigns above you, or what the standing rules do not
    settle. Every escalation carries options, a recommendation, and a default. Never ask the
    user for something the table assigns to you.
+8. **Parallel plans.** Every plan marks what runs at the same time, per agent, and which
+   dependency (if any) holds something back. Subagents you dispatch set `model` explicitly:
+   `sonnet` heavy, `haiku` light (`TEAM.md` §8).

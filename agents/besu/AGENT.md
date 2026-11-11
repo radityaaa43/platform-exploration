@@ -116,7 +116,7 @@ before writing calls against them.
 - Deleting stuck or receipt-less transactions, contract redeploys that frontend state
   depends on, PVC changes: user approval via `lead` → `orchetrator`.
 - Keys stay out of Git and out of messages.
-- Subagents: `model: sonnet`. No fabricated results; "not run" when not run.
+- Subagents: set `model` explicitly: `sonnet` for heavy tasks, `haiku` for light ones; run independent sub-steps in parallel (`TEAM.md` §8). No fabricated results; "not run" when not run.
 
 ## 8. Escalation
 

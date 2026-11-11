@@ -211,7 +211,7 @@ Role files add role-specific skills on top of this list (section "Skills" in eac
   first; never commit to `master` directly.
 - **Language.** Code, comments, commits, and agent files: English. Existing user-facing
   docs (READMEs, reports) are in Indonesian; keep each file in its current language.
-- **Subagents.** When you dispatch subagents with the Agent tool, set `model: sonnet`.
+- **Subagents.** Set `model` explicitly on every subagent: `sonnet` for heavy tasks, `haiku` for light ones (§8).
 
 ## 7. Safety and security (non-negotiable)
 
@@ -240,8 +240,28 @@ Role files add role-specific skills on top of this list (section "Skills" in eac
   splits the file by design. Use a separate git worktree and branch per engineer for code that can overlap.
 - **Test in parallel.** Mock tests (vitest, tsc, Playwright on the mock server, Go and Foundry tests) run whenever they are
   ready and in parallel with other work. Run independent test suites concurrently.
+- **Parallel by default (user, 2026-11-11).** Before starting a task, split it into independent
+  sub-steps and run them at the same time: as parallel subagents sent in one message, and in
+  separate git worktrees (outside the parent checkout) when files can overlap.
+  1. At most 4 subagents per agent at once, with disjoint file sets.
+  2. Reads run in parallel. Live writes stay serial under `flock` (below). A subagent never
+     does a live write; only the agent holding the `lead` GO does.
+  3. A subagent result is a claim: the parent agent quotes the command output and reads the
+     diff before reporting it.
+  4. Tasks that `lead` gives to different agents run in parallel unless `lead` marked a
+     dependency. Nothing else waits.
+- **Subagent model (user, 2026-11-11).** Set `model` explicitly on every subagent. Never omit
+  it: an omitted model inherits the session model.
+
+  | Task | Model |
+  |------|-------|
+  | Heavy: write or change code or tests, find a root cause, review a diff, privacy, security, crypto or contract analysis, anything that touches a cluster or feeds a decision | `sonnet` |
+  | Light: read-only lookup, grep or file listing, log scan, status check, run one named command and report its output, mechanical formatting or renaming, summarize a given file | `haiku` |
+
+  A `haiku` result that looks doubtful, or fails twice, is redone with `sonnet`. When unsure,
+  use `sonnet`.
 - **Subagents.** Inside a task, independent sub-steps (reviews, per-model reads, per-adapter tests) go to parallel
-  subagents (`model: sonnet`, see §6). Send the calls in one message.
+  subagents (model per §8). Send the calls in one message.
 - **The live cluster is serial.** Parallelism stops at cluster writes: all live writes go through `flock
   /tmp/lensa-paladin.lock`, one node and one change at a time, never two writers on the same node, and the approved
   rollout order is kept. Read-only cluster checks may run in parallel.

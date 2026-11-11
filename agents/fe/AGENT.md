@@ -151,3 +151,4 @@ query docs for that version.
   tests for `qa`. Never edit another agent's area.
 - **Claims.** Prove each claim with a command and quote the output line. Mark the rest
   "[unverified]".
+- Subagents: set `model` explicitly: `sonnet` for heavy tasks, `haiku` for light ones; run independent sub-steps in parallel (`TEAM.md` §8).
