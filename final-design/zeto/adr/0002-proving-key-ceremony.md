@@ -11,7 +11,7 @@ Left to the user. PLAN S12 stays BLOCKED(proving-key ceremony).
 
 ## Alternatives Considered
 - Accept the test keys as a PoC limit. Pros: no redeploy, addresses and balances stay (CONTRACTS.md), zero cost. Cons: whoever holds the setup toxic waste could forge proofs; stated limit in every report.
-- Multi-party ceremony, redeploy verifiers and tokens (cost L). Pros: removes the single-party trust. Cons: new verifier and token addresses, private balances are not carried (BI re-issues), Lensa `state/zeto.json` and the Zeto flows re-bootstrap, and the new keys must enter the Paladin image: a rebuild of the fork image, which the "no new custom code" rule may exclude [unverified], so it goes to `analyst` as a DEVIATION REQUEST first.
+- Multi-party ceremony, redeploy verifiers and tokens (cost L). Pros: removes the single-party trust. Cons: new verifier and token addresses, private balances are not carried (BI re-issues), Lensa `state/zeto.json` and the Zeto flows re-bootstrap, and the new keys must enter the Paladin image: a new fork image build with new key artifacts (fork build.gradle:67), no source change: analyst 2026-11-11 says this is not NEW custom code, but it forces the verifier + token redeploy.
 
 ## Consequences
 - Accepting keeps S12 closed with no change; the CONTRACTS.md row stays "test keys".
