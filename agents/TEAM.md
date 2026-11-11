@@ -33,7 +33,8 @@ User (product owner, final authority)
               ├── fabric    — developer: fabric-x/
               ├── iroha     — developer: iroha3/
               ├── fe        — developer: frontend/
-              └── qa        — tester: QA gate for every track and the frontend
+              ├── qa        — tester: QA gate for every track and the frontend
+              └── analyst   — evaluator: checks work against pinned upstream repos and docs, read-only, reports to user and lead
 ```
 
 Role files: `agents/<role>/AGENT.md` (`lead`, `besu`, `fabric`, `iroha`, `fe`, `qa`; `blockchain` is legacy reference).
