@@ -36,3 +36,6 @@ BI is the notary and submits every Noto tx; BI offline settlement is not claimed
 
 ## 7. Decentralization per bank
 Same D1-D4 as `zeto.md` section 7 (the nodes are shared with Zeto) plus: `D-notary`: the notary key Secret exists only in `rd-zeto-bi` (Secret names, `can-i` from bank namespaces = `no`); each bank's Noto-side signing key is in its own namespace.
+
+## 8. Four-of-four matrix (`L6-COMMON.md` section 7; run first)
+Noto and Pente run on the same per-party nodes as Zeto: quote the Zeto matrix cells (Paladin node, Postgres, keys, gateway + OPA, bundle server, consensus node) for `rd-zeto-<p>`, plus per party: the notary key Secret only in `rd-zeto-bi` (BI is the notary, so that one is 1 cell, not 4, and is recorded as the design), and one Pente group member per bank (names only). Placement as Zeto. Line `L6 noto 4OF4`.

@@ -45,3 +45,14 @@ The pod names and the stop method are named by `fabric` in each word request.
 | D3 | no shared CA: `openssl x509 -noout -issuer -subject` on each org's public CA cert gives 4 distinct issuers (`fca-org1..4`); Secret names per namespace (names only) | 4 distinct | a shared issuer |
 | D4 | 12 ordered `can-i get secrets` = `no`; no cluster-admin on the Lensa host; `party-admin` Role has `pods/portforward` (create) and no `pods/exec` | as stated | any `yes` |
 | D-tail | W2: a bank down does not stop the others (R2a) | pass | stall |
+
+## 8. Four-of-four matrix (`L6-COMMON.md` section 7; run first)
+| Component (per party) | Where to read | Cells |
+|---|---|---|
+| consensus (consenter) + ordering (assembler, router, batcher) | pods in `rd-fabricx-<p>` `[unverified: role pod names from S10]` | 4 |
+| committer / sidecar | `rd-fabricx-<p>` | 4 |
+| FSC token node | `rdbi-*`-style FSC node in `rd-fabricx-<p>` with its own admin cert (S13) | 4 |
+| CA + keys | `fca-org<N>` (cluster 2 for org4), Secret names only | 4 |
+| gateway + OPA | `fx-gw-<N>` | 4 |
+| bundle server | per party `[unverified]` | 4 |
+The token namespace `rd_dfabi_v2` is one shared instance (S14), reached through each party's own node. Placement: BI, A, B `ap-southeast-5`; C `ap-southeast-1`. Line `L6 fabricx 4OF4`.

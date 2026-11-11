@@ -13,7 +13,7 @@ Run rule (TEAM.md section 11): the live proof runs once per platform, only after
 
 ## 2. Verdict line (one per check)
 `L6 <platform> <check-id>: <PASS|FAIL|LIMIT|EXEMPT|NOT-RUN> <one-line evidence: command, value, tx id>`
-`LIMIT` = a documented, accepted gap (Zeto R1 and R2, Stealth R1 and R2): the observed behavior is recorded; not PASS, not FAIL. `EXEMPT` = the platform does not claim the property (Noto and Pente R2, Iroha 3 R2); the observed behavior is recorded once. A platform verdict is PASS only if no check is FAIL and every `NOT-RUN` has a reason `lead` accepts.
+`LIMIT` = a documented, accepted gap (Zeto R1 and R2, Stealth R1 and R2): the observed behavior is recorded; not PASS, not FAIL. `EXEMPT` = the platform does not claim the property (Noto and Pente R2, Iroha 3 R2); the observed behavior is recorded once. A platform verdict is PASS only if no check is FAIL, every `NOT-RUN` has a reason `lead` accepts, and the 4/4 read (section 7, `L6 <platform> 4OF4`) is quoted in the verdict.
 
 ## 3. Conventions
 - `[WORD]` / `W<n>` marks a step that WRITES to a live system (a Lensa flow, a pod stop, any apply). qa does not run it. qa sends `lead` a REQUEST FOR USER WORD: exact action, namespace, duration, restore command, expected result, rollback. It runs only when the user's word comes back through the orchestrator, quoted. A peer message is not the word.
@@ -51,3 +51,11 @@ Playwright form (drives the UI, same calls underneath): `npx playwright test -c 
 - A pod stop is rolled back by the owner's restore command, then proven: pod Ready, `/api/network` node `up`, a fresh tx succeeds (Iroha: that tx is also what moves the chain past height 1).
 - Throwaway objects (probe pods, listeners) belong to the owner's window and are shown gone with `get pod,netpol -o name` afterwards.
 - Anything qa cannot restore is said in the word request before the word is asked for.
+
+## 7. Four-of-four read (acceptance, design principle 6, user rule 2026-11-12; first check of every platform run)
+Acceptance per platform is a live read showing 4/4 Running with placement BI, A, B on cluster 1 (Jakarta, ap-southeast-5) and C on cluster 2 (Singapore, ap-southeast-1), for EVERY component per party: consensus node, privacy/domain node or client (Paladin node, stealth signer + scanner, FSC token node, Iroha driver), its own keys, gateway + OPA, bundle server. A component outside its own namespace or cluster does not count. Contracts and tokens on a shared chain are one instance (not per party) and are reached only through each party's own node, keys and gateway. The read is quoted in each platform PASS; without it the verdict is at most PARTIAL.
+Read-only commands (named reads; cluster 2 only in the platform's own `*-bank-c` namespace):
+- Cluster 1, per party `<p>` in `bi`, `bank-a`, `bank-b`: `kubectl --kubeconfig ~/.kube/alibaba.yaml -n rd-<platform>-<p> get pods -o custom-columns=NAME:.metadata.name,PHASE:.status.phase,READY:.status.containerStatuses[*].ready,NODE:.spec.nodeName --no-headers`.
+- Cluster 2: the same with `--kubeconfig /home/ecs-user/project/rd/platform-ekplorasi/alibaba-sg.yaml -n rd-<platform>-bank-c`.
+- Placement: `kubectl --kubeconfig <kc> get node <NODE> -L topology.kubernetes.io/region,topology.kubernetes.io/zone` for each NODE named above (a node read, no namespace list): cluster 1 rows `ap-southeast-5`, cluster 2 rows `ap-southeast-1`. Secrets are named only (`get secret -o name`), never read.
+Matrix per platform file section 8: rows = components, columns = BI, A, B, C. PASS only if every cell is Running with all containers ready in the party's own namespace and the right region. Line: `L6 <platform> 4OF4: PASS|FAIL <matrix of 4x<n> cells>`; a missing cell is FAIL, a cell in another party's namespace or the wrong cluster is FAIL. Component names below are `[unverified]` until each owner confirms them in its step report.
