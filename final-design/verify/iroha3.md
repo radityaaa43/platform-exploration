@@ -57,5 +57,17 @@ RD/DFABI are in genesis (one instance). Placement: BI, A, B `ap-southeast-5`; C 
 
 ## 10. P-check / open R-rows (`L6-COMMON.md` section 9; register `agents/qa/REGISTER.md`)
 - P1: D3 + host key listing; P2: D4 + kubeconfig modes; P3: consensus row of section 8; P5: image refs vs the pins in `final-design/iroha3/PLAN.md`; P6: section 8 matrix.
-- P4 allowed third parties (cited, everything else FAIL): the APS online auditor (BI today; 2-of-3 auditors A+B planned, k-of-n up to 32 supported upstream).
+- P4 allowed third parties (cited, everything else FAIL): the APS online auditor (BI today; 2-of-3 auditors BI + bank-a + bank-b built in S11-S13 (README row 19; each auditor key in its own namespace), k-of-n up to 32 supported upstream).
 - Open R-rows for this platform: R1, R8 (gateway/OPA 0/4 + 2-of-3 auditors: closes at iroha S14 + S11-S13), R10 (`bi-gov` seed host backup: closes when moved off-host, then shredded), R12 (window-A host forwards + read-lens NOT-RUN: closes at the window-B gateways). `L6 iroha3 OPEN-R` quotes each with its state read now; also R13 FINAL (every RBAC object in `rd-iroha3-<party>` operator-created); any open row = PARTIAL unless `lead` accepts it in writing. R1, R2, R9, R10 = OPEN-PARKED.
+
+## 11. Rerun readiness: pull test (`L6-COMMON.md` gate item 6) and S11-S14 proofs
+Pull-test image list per cluster (qa lists, the owner pulls under the GO, qa quotes `PULLED <digest>` per line; cluster 2 on its own):
+| Image | Reference (PLAN line) | Used by |
+|---|---|---|
+| node | `ghcr.io/radityaaa43/iroha3-rd-node:071e281e-stark` (PLAN L104) | the four peers |
+| driver | `ghcr.io/radityaaa43/iroha3-rd-driver:<tag from S10>` (tag open, not a digest); the old one is `:c1afa678` (PLAN L137) | pay/pool/auditor driver, scenario Jobs |
+| `bi-auditor` | NOT STATED (`deploy/k8s-apps/bi-auditor.yaml`, PLAN L149) | `bi-auditor` |
+| Envoy, OPA of `gateway` | NOT STATED (PLAN S14) | `gateway` x4 |
+A tag-only or "not stated" reference is a P5 finding to fix before the apply, not a PASS.
+S11-S14 proofs: `final-design/iroha3/VERIFY.md` rows S11-S14 (updated 2026-11-12: 2-of-3 A+B decided; auditor keys only in their own namespaces; S14 gateways + `torii-bootstrap` deleted in all four namespaces, probes run by iroha's probe pods and quoted).
+Register: R8 (gateway/OPA 0/4 + 2-of-3 auditors) closes only when S11, S12, S13 AND S14 are all done, with the `L6 iroha3 4OF4` gateway row at 4/4 and the policy read `min_approvals` 2 of 3. R12 closes at the S14 window-B gateways: quote that `lensa.env` and `forwards.conf` no longer list Iroha forwards. R10 is not moved by S11-S14 (user-only, OPEN-PARKED). The "bundle server per party" row of section 8 stays `[unverified]`: the PLAN does not describe one for Iroha.

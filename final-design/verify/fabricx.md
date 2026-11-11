@@ -61,3 +61,15 @@ The token namespace `rd_dfabi_v2` is one shared instance (S14), reached through 
 - P1: D3 + host key listing; P2: D4 + kubeconfig modes; P3: consensus row of section 8; P5: image refs vs the pins in `final-design/fabricx/PLAN.md`; P6: section 8 matrix.
 - P4 allowed third parties (cited, everything else FAIL): none required upstream (3-of-4 endorsement and report-to-BI are deployment choices, documented as such).
 - Open R-rows for this platform: R1, R4 (CA admin passwords of 4 orgs on one host; blocks new uses), R5 (ceremony admin keys never co-located), R6 (`ids/anon` creator key shared in every org pod: permanent on this channel, exemption pending), R8 (`fx-gw`/OPA 0/4 + `rd_dfabi_v2`: closes at S14/S16), R13 FINAL (P2: `party-admin` cannot manage its own RBAC; every RBAC object in `rd-*-<party>` is operator-created, incl. `reconcile` in `rd-fabricx-bi` re-rendered at each FSC rollout; closes when `party-admin` has roles/rolebindings rights in its own namespace and BI re-applies `reconcile` with its own credential, quoted). `L6 fabricx OPEN-R` quotes each with its state read now; any open row = PARTIAL unless `lead` accepts it in writing.
+
+## 11. Rerun readiness: pull test (`L6-COMMON.md` gate item 6) and S14/S16 proofs
+Pull-test image list per cluster (qa lists, the owner pulls under the GO, qa quotes `PULLED <digest>` per line; cluster 2 on its own):
+| Image | Reference (PLAN line) | Used by |
+|---|---|---|
+| FSC / fxapi / init | `ghcr.io/radityaaa43/rdbi-node@sha256:61b473e881b1b5f1bc37c3879bd453807255afcd1efa6d7d13d840b1e5ad6216` (tag `ebbb28f1d552`; PLAN L150, L252); the D4 rebuilt image: digest NOT STATED | every FSC pod, `fx-gw` fxapi container |
+| orderer | `fabric-x-orderer:1.0.4` "by digest"; repo and digest NOT STATED (PLAN L125) | consenter, assembler, router, batcher |
+| committer | 1.0.4 "by digest"; repo and digest NOT STATED (PLAN S18, L202) | committer + sidecar |
+| Envoy, OPA of `fx-gw` | NOT STATED in the PLAN (the old stack uses `envoyproxy/envoy:v1.38.9`, `openpolicyagent/opa:1.21.1-envoy-1-static`, tags only, CURRENT L39) | `fx-gw-<N>` |
+A tag-only or "not stated" reference is a P5 finding to fix before the apply, not a PASS. S14 creates no pods: its pull test is the already-running fxapi image from S13 and S16.
+S14 and S16 proofs: `final-design/fabricx/VERIFY.md` rows S14, S16 (rewritten 2026-11-12 from PLAN L155-185, L250-259; S14 issues nothing, the `setup-pp` exec and the 2-signature negative are quoted from fabric's window).
+Register: S14 + S16 close ONLY R8 (fabricx part), with the line `L6 fabricx R8: PASS 4/4 fx-gw + OPA, rd_dfabi_v2 policy=<string>, sha256(pp)=<hex>` quoted from the 4/4 matrix and the S14 read. R4 stays open (S16 adds PERMANENT `fx-gw-*` identities at the CA-interim: check the issuance record), R5 is checked at the S14 ceremony (three admin keys, never co-located), R6 and R13 not moved (a cluster-admin `setup-pp` exec would be a recorded R13 deviation). `L6 fabricx OPEN-R` still lists R1, R4, R5, R6, R13.
