@@ -122,6 +122,7 @@ Shared with zeto (referenced by zeto S id, not repeated): validators and chain d
 - RED proof: `GET /holdings` of the BI signer for a BI stealth balance equals Lensa's BI history; a bank `viewKey` loaded without its meta-address is refused (`view key does not match meta-address of <id>`, `ts/stealth.ts:74`); before: no pod in `rd-stealth-bi`.
 - Rollback: delete the Deployments and store entries in `rd-stealth-bi`.
 - Sources: `besu@9890701:stealth-address/ts/stealth.ts:69-81`; `frontend@28c8bdb:server/src/adapters/stealth.ts:117,120-122` (BI wallet and view-key holders); ARCHITECTURE 2 row "BI see all", hard limit 2.
+- STATUS 2026-11-12 (besu, host clock): `ROLE=bi` is NOT BUILT. `stealth-address/signer/src/main.ts` accepts `ROLE` bank|custodian only (`SignerConfig.role`, `signer/src/types.ts`); there is no issuer-key signing path (mint, DFABI issue, DvP RD leg), no BI key-store loader (`stealth-bi-keys`: issuerKey, biMeta, registryKey placeholder), and no scan loop over per-bank `viewKey` copies (`scanView`/`scanAll` exist in `ts/stealth.ts:67-80` but nothing calls them in the signer). Stealth DELTA 3 (BI scanner with view-key copies) is therefore UNBUILT. S9 banks do not depend on it and can go first; S10 is not ready for a window. Estimate about a day test-first for the role plus renders [estimate].
 
 ### S11: View-key handover and registry compare job
 - DELTA: 3 -> AFTER row: "BI compares the viewing public key inside each bank's registered meta-address"
@@ -132,6 +133,7 @@ Shared with zeto (referenced by zeto S id, not repeated): validators and chain d
 - RED proof: unit test in `besu/stealth-address` (vitest, fixture with two registered key pairs): matching copy -> `match`, registry key replaced -> `MISMATCH bank-a` (fails before the job exists); live read-only: three banks `match`.
 - Rollback: delete the CronJob and the copies in `rd-stealth-bi`.
 - Sources: EIP-6538 Specification (`stealthMetaAddressOf`, `registerKeys`, event `StealthMetaAddressSet`); EIP-5564 "Stealth meta-address format"; `besu@9890701:stealth-address/src/ERC6538Registry.sol`; ARCHITECTURE 2 row "BI detective check" (layout assumption not executed: UNVERIFIED there).
+- STATUS 2026-11-12 (besu, host clock): UNBUILT. No CronJob `stealth-viewkey-compare`, no `StealthMetaAddressSet` watcher, no render, no test exists in rd-besu. It needs S10 (BI holds the bank identity list and the view-key copies). Stealth DELTA 3 ("BI compares the viewing public key inside each bank's registered meta-address") stays OPEN until this and S10 are built; order: S10 code and S11 job BEFORE the S12 chain role move (analyst order).
 
 ### S12: Custodian party and DFABI roles
 - DELTA: 4, 4a -> AFTER row: "Custodian role: not required to be BI; roles that move: owner, minter, controllers, certificate signer, DvPFactory"
