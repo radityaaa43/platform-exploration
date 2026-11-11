@@ -19,3 +19,6 @@ The DFABI cert-issuer custodian = BI (DELTA 4 decided). Accepted limit: the stea
 - (a): S12 is a key split inside BI's store; the custodian signer runs in `rd-stealth-bi`.
 - (b): a new namespace and gateway for the custodian party; the plan gains a namespace step and a view-key handover per bank to a second holder.
 - (c): S12 plus a design for sender disclosure; goes to `analyst` first.
+
+## Addendum 2026-11-12: key store product (user "stealth A")
+Key store = Kubernetes Secret per party now (option A); Vault (README row 28) is NOT installed, no spend; this is a recorded GAP against row 28 and the AFTER "keys in bank Vault/KMS". Hardening candidates listed, not analyzed, none chosen: Vault, Alibaba Cloud KMS envelope, OpenBao, ACK etcd encryption with a cloud key. The accepted limit above is unchanged: with any store the spend key sits raw in signer memory.
