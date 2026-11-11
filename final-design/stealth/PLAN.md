@@ -38,7 +38,7 @@ Shared with zeto (referenced by zeto S id, not repeated): validators and chain d
 - DELTA: 5 -> AFTER row: "Each bank runs its own Besu validator with a node key it generated"
 - Owner: besu  Size: S
 - Prerequisites: zeto S5 (this plan adds no validator pod: one validator per bank, shared by zeto, noto-pente and stealth)
-- Flags: user-only (the vote-out of the old validators is zeto S5b: user-only, waits for VERIFY)
+- Flags: user-only (the vote-out of the old validators is zeto S5b: user-only, waits for VERIFY); the RED port-forwards to `rd-zeto-<party>` pods run outside the flock, read-only (admin RPC query only)
 - Does: nothing is deployed. After zeto S5 record in CURRENT.md the validator-to-party mapping by namespace (`rd-zeto-<party>` pod `besu-validator-0`): it replaces the ARCHITECTURE inference "1=BI 2=A 3=B 4=C" (netpol guess, UNVERIFIED) with a fact. Old `besu` validators stay running until S22 (stealth still reads through them until S20).
 - RED proof: through port-forward to each `besu-validator-0` (admin RPC is denied through the OPA door, CURRENT section 1): `qbft_getValidatorsByBlockNumber latest` before = `0xe89105d4…25d0 0x712f8366…69fd 0x95197d60…a715 0xd27cb197…38d9f3`, after = 4 addresses none of them old, each equal to `besu-node-address` of one party ns.
 - Rollback: none needed (read-only); zeto S5 rollback governs.
@@ -68,7 +68,7 @@ Shared with zeto (referenced by zeto S id, not repeated): validators and chain d
 - DELTA: none (correctness record, analyst adds the addendum) -> AFTER row preserved: "No new contract design; only role holders move." (ARCHITECTURE-stealth.md:66; units untouched)
 - Owner: qa  Size: S
 - Prerequisites: S4 (read through the new RPC node with a read-only `eth:*` token minted from Secret `stealth-rpc-jwt` as in S4; the earlier check failed at the old mTLS door, LENSA.md section 3)
-- Flags: none
+- Flags: read-only (the proof token is minted by the S4 operator from Secret `stealth-rpc-jwt` inside the S4 window and handed over; S6 itself reads no cluster Secret)
 - Does: read `decimals()`, `granularity()`, `totalSupply()` of RD and DfabiBond and one holder `balanceOfByPartition(TRANCHE_A, …)`; write the result as the CONTRACTS.md units cells, and one line "whole units; wallets honouring `decimals()` show 1e-18" in `besu/stealth-address/docs` only if the user asks. Lensa constants stay `PRICE_PER_UNIT = 1_000_000n`, `MAX_AMOUNT = 10n ** 15n` (`frontend@28c8bdb:server/src/domain.ts:14-15`).
 - RED proof: DFABI `decimals()` -> `0x…12` (18), `granularity()` -> `0x…01`, `totalSupply()` -> `3007139` raw, equal to the whole-unit supply Lensa shows (CURRENT section 2 gives the same numbers); RD `decimals()` -> `0x…00`. Mismatch (supply scaled by 1e18) would turn this step into a defect for `lead`.
 - Rollback: none (read-only).
@@ -79,7 +79,7 @@ Shared with zeto (referenced by zeto S id, not repeated): validators and chain d
 - Owner: besu  Size: M
 - Prerequisites: S1, S2; user chooses the key-store product (Vault, or cloud KMS envelope on Secrets: AFTER names both, picks neither)
 - Flags: CLUSTER-OP, spend, user-only (product choice)
-- Does: per ns one store reachable only from pods `app=stealth-signer`: path/Secret `stealth-keys` holding names `spendKey`, `viewKey`, `identityKey` (bank) or `issuerKey`, `custodianKey` placeholder, `biMeta` (BI). Hard limit 6: the signer needs the spending key in memory (EIP-5564 "Private key derivation"), so an HSM-only signing mode is not planned. NetworkPolicy: store ingress only from `stealth-signer`. Backup/seal policy named by the product.
+- Does: per ns one store reachable only from pods `app=stealth-signer`: path/Secret `stealth-keys` holding names `spendKey`, `viewKey`, `identityKey` (bank) or `issuerKey`, `custodianKey` placeholder, `registryKey` placeholder (the S15 InstrumentRegistry holder, DELTA 8a), `biMeta` (BI). Hard limit 6: the signer needs the spending key in memory (EIP-5564 "Private key derivation"), so an HSM-only signing mode is not planned. NetworkPolicy: store ingress only from `stealth-signer`. Backup/seal policy named by the product.
 - RED proof: from `stealth-signer` (S9) read of `stealth-keys` -> ok; same read from a pod `app=st-gw` in the same ns and from another ns -> denied/timeout; `kubectl -n rd-stealth-bank-a get secret -o name` lists no key outside `stealth-keys`.
 - Rollback: delete the store (empty before S9).
 - Sources: ARCHITECTURE 2 row "Bank keys" and hard limit 6 (inference from the EIP formula, not tested); EIP-5564 "Private key derivation"; Besu use-besu-api "Account management".
@@ -110,7 +110,7 @@ Shared with zeto (referenced by zeto S id, not repeated): validators and chain d
 - Owner: besu  Size: M
 - Prerequisites: S4, S7, S8
 - Flags: CLUSTER-OP, user-only (same trust reset as S9 for BI keys)
-- Does: Deployment `stealth-signer` role `bi` and `stealth-bi-scanner` in `rd-stealth-bi`: BI keys `deployerKey` -> `issuerKey` role copy (DELTA 8; the key still holds every role until S15) (mint, DFABI issue, DvP RD leg), `biMeta` (BI stealth receive keys); scanner uses `scanView`/`scanAll` with per-bank `viewKey` copies (S11 fills them), never a spend key; BI's store also holds the list of bank identity addresses (the S11 registry lookup key, Key bindings (iii)). Signing role `custodianKey` stays empty until S12 decides the party.
+- Does: Deployment `stealth-signer` role `bi` and `stealth-bi-scanner` in `rd-stealth-bi`: BI keys `deployerKey` -> `issuerKey` role copy (DELTA 8; the key still holds every role until S15) (mint, DFABI issue, DvP RD leg), `biMeta` (BI stealth receive keys), `registryKey` placeholder (filled at S15, DELTA 8a); scanner uses `scanView`/`scanAll` with per-bank `viewKey` copies (S11 fills them), never a spend key; BI's store also holds the list of bank identity addresses (the S11 registry lookup key, Key bindings (iii)). Signing role `custodianKey` stays empty until S12 decides the party.
 - RED proof: `GET /holdings` of the BI signer for a BI stealth balance equals Lensa's BI history; a bank `viewKey` loaded without its meta-address is refused (`view key does not match meta-address of <id>`, `ts/stealth.ts:74`); before: no pod in `rd-stealth-bi`.
 - Rollback: delete the Deployments and store entries in `rd-stealth-bi`.
 - Sources: `besu@9890701:stealth-address/ts/stealth.ts:69-81`; `frontend@28c8bdb:server/src/adapters/stealth.ts:117,120-122` (BI wallet and view-key holders); ARCHITECTURE 2 row "BI see all", hard limit 2.
@@ -178,7 +178,7 @@ Shared with zeto (referenced by zeto S id, not repeated): validators and chain d
 ### S17: Stealth gateway and OPA per party
 - DELTA: 6, 7 -> AFTER row: "Gateway + NetworkPolicy: envoy+opa is the only ingress from Lensa"
 - Owner: besu  Size: M
-- Prerequisites: S4, S5, S9, S10; zeto S16, S17 (manifest, per-party mTLS CA, bundle server); read-only: the LB address the LoadBalancer is S17's own gateway Service `st-gw-4` on cluster 2 (spend, user-only); its address is read after creation and quoted in CURRENT.md before the bank-C `/cert` route is configured, quoted in the PR
+- Prerequisites: S4, S5, S9, S10; zeto S16, S17 (manifest, per-party mTLS CA, bundle server); read-only: the custodian's gateway address: the cert path runs bank-C signer (cluster 2) -> custodian `/cert` (cluster 1), so the LoadBalancer (spend, user-only) sits on the custodian's gateway Service on cluster 1 (`st-gw-1` while the custodian is BI; whichever gateway ADR 0001 picks); `st-gw-4` stays inbound-only (NodePort/ClusterIP, no LoadBalancer); the address is read after creation and quoted in CURRENT.md before the bank-C `/cert` route is configured
 - Flags: CLUSTER-OP, spend (LoadBalancer for the custodian cert path)
 - Does: Deployment and Service `st-gw-<N>` (N: 1 BI, 2 A, 3 B, 4 C; the name fits the Publisher guard `^[a-z0-9]+-gw-[1-4]$`, `frontend@28c8bdb:server/src/policy/kube.ts:22`) in each `rd-stealth-<party>` from `besu@9890701:opa/k8s/bank-gw-1.yaml` (namespace lines become the ns); envoy fronts the signer API and the read door of the RPC node (rego `bi.besu` method allowlist unchanged for reads; new package `bank.stealth` for `/intent`, `/holdings`, `/history`, `/cert`: new rego file, not in CURRENT); bundles pulled from zeto S17's `bundle-server` in `rd-zeto-<party>` (cross-ns rule added there). Service for the BI custodian path reachable from cluster 2 (LB address quoted from that prerequisite). NetworkPolicy: signer API ingress only from `st-gw`.
 - RED proof: party B's Lensa client cert on `st-gw-2` -> TLS handshake failure, A's cert -> `GET /holdings` 200; a method outside the allowlist on the read door (`debug_traceTransaction`) -> denied; `/cert` from the bank C signer pod to BI's gateway answers (qa; exercises the custodian key, so it runs only inside this step's CLUSTER-OP window).
