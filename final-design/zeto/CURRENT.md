@@ -121,10 +121,10 @@ Outside the namespaces that point at them: 8 units `lensa-pf@{paladin-node1..4,b
 Method [K]: `kubectl get nodes -o json` (allocatable, `status.volumesAttached`), `kubectl describe nodes | grep -A6 'Allocated resources'`, `kubectl get pods -A --field-selector=status.phase!=Succeeded,status.phase!=Failed -o json` (pods per node). Namespaces `rd-zeto-bi`, `rd-zeto-bank-a`, `rd-zeto-bank-b`: `kubectl get ns` -> `NotFound` x3.
 | Item | Found |
 |---|---|
-| Nodes | 21: 4 `core-*` (3 x `ecs.g8a.large` 1930m CPU / 7.0 GiB / 15 pods, zones 5a, 5b, 5c; one more in 5a) and 17 `member-*` (`ecs.c8a.xlarge`, zone 5b, 3920m CPU / 6.2 GiB / 48 pods) |
+| Nodes | 21: 4 `core-*` (`ecs.g8a.large`, 1930m CPU / 6.7 GiB / 15 pods; zones 5a x2, 5b, 5c) and 17 `member-*` (`ecs.c8a.xlarge`, zone 5b, 3920m CPU / 6.2 GiB / 48 pods) |
 | Pods | 314 non-terminated pods; busiest node 23 of 48; `core` nodes limited to 15 pods |
-| CPU requests | per node 15% to 97% of allocatable; 3 nodes above 80% (`core-11197` 87%, `member-16033` 97%, `member-16034` 85%); limits are overcommitted everywhere (112% to 857%) |
+| CPU requests | per node 41% to 97% of allocatable; 3 nodes above 80% (`core-11197` 87%, `member-16033` 97%, `member-16034` 85%); limits are overcommitted everywhere (112% to 857%) |
 | Memory requests | per node 15% to 85% (`member-16033` 85%, `member-16034` 74%) |
 | Attached volumes | per node 2 to 8 (`member-16045` 8; `member-16032` and `-16034` 7; `-16033` 6); the node `allocatable` carries NO `attachable-volumes-*` key, so the per-node attach limit is not readable from the API: fabricx CURRENT section 6 saw 5/5 on one node, but 6 to 8 are attached now, so that figure is not a fixed cap [limit unverified] |
-| Plan impact | zeto S3 adds 3 x 40Gi Besu PVCs and S8 4 x 20Gi Postgres PVCs (7 attaches), stealth S4 3 x 40Gi: each is one attach on whichever node the pod lands on (`alicloud-essd` Immediate binds the zone first; `-wffc` waits for the pod). Request sizes of the new pods must fit nodes under 60% CPU (all `member-*` except 16033/16034/16032) |
+| Plan impact | zeto S3 adds 3 x 40Gi Besu PVCs and S8 4 x 20Gi Postgres PVCs (7 attaches), stealth S4 3 x 40Gi: each is one attach on whichever node the pod lands on (`alicloud-essd` Immediate binds the zone first; `-wffc` waits for the pod). |
 Not read: the ECS per-instance disk-attach limit (Alibaba docs / instance type, not the API), cluster 2.
