@@ -43,4 +43,4 @@ Noto and Pente run on the same per-party nodes as Zeto: quote the Zeto matrix ce
 ## 10. P-check / open R-rows (`L6-COMMON.md` section 9; register `agents/qa/REGISTER.md`)
 - P1: D3 + host key listing; P2: D4 + kubeconfig modes; P3: consensus row of section 8; P5: image refs vs the pins in `final-design/noto-pente/PLAN.md`; P6: section 8 matrix.
 - P4 allowed third parties (cited, everything else FAIL): the Noto notary (BI) and Pente 100% group endorsement (each group `{one bank, BI}`).
-- Open R-rows for this platform: R1, R7, R9, R11 (as Zeto: the nodes are shared). `L6 noto-pente OPEN-R` quotes each with its state read now; any open row = PARTIAL unless `lead` accepts it in writing.
+- Open R-rows for this platform: R1, R7, R9, R11 (as Zeto: the nodes are shared). `L6 noto-pente OPEN-R` quotes each with its state read now; also R13 FINAL (same objects as Zeto); any open row = PARTIAL unless `lead` accepts it in writing. R1, R2, R9, R10 = OPEN-PARKED.
