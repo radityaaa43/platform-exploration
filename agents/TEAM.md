@@ -110,6 +110,7 @@ DECISION NEEDED: <question> | OPTIONS: A..., B... | RECOMMENDED: <X> because <so
 ## 5. Cluster and host safety
 
 Always:
+- Deviation rule (2026-11-12, besu L-A findings): an error or a missing object inside a write window is a STOP and a report with the proposed continuation, never an in-window repair; a delete is never a repair; `lead` discloses the deviation and gets the word before the step resumes.
 - Late condition rule (2026-11-11 iroha S7a slip): a message that adds a condition to a step already under WINDOW OPEN means stop at the next object boundary and acknowledge it before the next write; lead sends WINDOW OPEN only after every pending orchestrator reply on that step is in.
 - Timestamps: the reference clock is the host `date` (zone CST = UTC+8); every step line carries UTC next to CST (`2026-11-11 23:09 CST / 15:09 UTC`); the orchestrator's clock may read ahead, so compare on UTC.
 - Load `superpowers:using-superpowers` with the Skill tool at the start of every session and every task, and follow the skill it points to (`superpowers:using-git-worktrees`, `superpowers:test-driven-development`, `superpowers:verification-before-completion`, `superpowers:systematic-debugging`, `superpowers:requesting-code-review`); name the skills used in every implementation PR body (user order 2026-11-11; `analyst` exempt, it only reads).
