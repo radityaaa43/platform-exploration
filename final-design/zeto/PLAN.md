@@ -42,6 +42,7 @@ Reused by noto-pente and stealth: S1-S5 (namespace pattern, validator per bank),
 - RED proof: before `kubectl -n rd-zeto-bank-a get sts besu-validator` -> `NotFound`; after, via port-forward to the pod: `eth_chainId` -> `0x539`, `net_peerCount` >= `0x3`, `admin_peers` lists the 2 other new cluster-1 enodes, `eth_blockNumber` within 2 blocks of `besu-node-validator-1`.
 - Rollback: delete sts, pvc, Services in `rd-zeto-<x>`; remove the added rule in `besu`.
 - Sources: Besu docs (context7 `/websites/besu-eth`, unversioned) bootnodes, static-nodes-file, p2p-host options and private-networks node keys "Domain name support" (DNS in an enode is early access, needs `--Xdns-enabled`; an enode carries one IP); CURRENT section 1.
+- Cross-plan: the stealth plan (stealth S4) adds a non-validator JWT RPC node per party that dials this validator; the S1 NetworkPolicy must allow TCP 30303 from `rd-stealth-<party>` as well (stealth PLAN.md S4).
 
 ### S4: Besu node for bank C on cluster 2
 - DELTA: 11, 3 -> AFTER row: "Besu reader node ... enode reachable through an L4 LB for TCP 30303 and UDP discovery" (UDP dropped here: static-nodes peers dial by TCP, S4 Does)
