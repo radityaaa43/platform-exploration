@@ -18,8 +18,8 @@ Peer keys and addresses come before the nodes (genesis needs `pop_hex` and the p
 9. S9 per-bank key custody Secrets (after S5, S8)
 10. S10 per-bank client and sponsor in the driver (after S9)
 11. S11 auditor 1 and policy from config (after S4, S8, S10)
-12. S12 auditor orgs 2 and 3: BLOCKED (after S11)
-13. S13 pools activate with the decided k-of-n (after S11, S12; BLOCKED with S12)
+12. S12 auditor orgs A and B (bank-a, bank-b; 2-of-3 decided): own-namespace auditor keys (after S11)
+13. S13 pools activate with the decided k=2, n=3 (after S11, S12)
 14. S14 gateways and OPA; closes `torii-bootstrap` (after S8, S13)
 15. S15 pools index published by BI (after S13)
 16. S16 Lensa per-bank pointers (after S10, S14, S15)
@@ -142,17 +142,19 @@ Peer keys and addresses come before the nodes (genesis needs `pop_hex` and the p
 - Owner: iroha  Size: M
 - Prerequisites: S4, S8, S10
 - Flags: CLUSTER-OP
+- ANALYST (2026-11-12, delegated by the user, via lead): iroha 2-of-3 auditors orgs A + B (README row 19) are BUILT as steps S11 -> S12 -> S13, no deviation (source `iroha@071e281e` `crates/iroha_data_model/src/nexus/private_settlement.rs:2224-2227`, `crates/iroha_core/src/private_settlement/state.rs:1118`; ARCHITECTURE-iroha3 hard limit 3). Conditions: (a) each auditor key is generated and held ONLY in its own org namespace (`rd-iroha3-bank-a`, `rd-iroha3-bank-b`), never on the Lensa host; (b) it does not block zeto S21 and runs in the iroha track BEFORE the Lensa keyless cutover; order: epoch read -> S18 window A (D-native, no auditor) -> S10 sponsor + S11 `policy_from_config` code -> S12 auditor keys A/B in-namespace -> S13 pool activation -> APS flows -> Lensa cutover; (c) RED proof: BI auditor offline + A and B approve -> the settlement commits; only 1 approval -> NOT committed; (d) residual recorded: A and B are also trading parties (an auditor approves its own leg), so 2-of-3 still needs a second independent approver.
 - Does: code: make `min_approvals` and the `auditors` list config keys in `rd-dfabi.toml` (hardcoded at `aps.rs:917,919`, CURRENT.md section 2) and make the driver wait for k approvals instead of one `/approve` (the `/approve` loop at `aps.rs:386-396`; `:384` is `println!("legs uploaded")`). Cluster: in `rd-iroha3-bi` Deployment `bi-auditor` (readOnlyRootFilesystem, as CURRENT.md section 2), Secret `bi-auditor-key` (created by S4 in this namespace, not recreated here), PVC `bi-audit-store` 1Gi, ConfigMaps `rd-dfabi-config`, `rd-dfabi-peers`, NetworkPolicy `bi-auditor` (8090 from the BI gateway only; the bank and bank-C route is `/v1/auditor/*` on the BI gateway, S14). The auditor starts with the policy file S12 decides; no pool is activated before S12 (S13). The auditor HTTP caller is unauthenticated today [unverified, LENSA.md section 5].
-- RED proof: `cargo test -p driver policy_from_config` (k=2, n=3 config parses; k=0 and k>n rejected) -> `test result: ok. 3 passed`; live: `kubectl get deploy bi-auditor -n rd-iroha3-bi -o jsonpath='{.status.readyReplicas}'` -> `1`
+- RED proof: `cargo test -p driver policy_from_config` (k=2, n=3 config parses; k=0 and k>n rejected) -> `test result: ok. 3 passed`; live: `kubectl get deploy bi-auditor -n rd-iroha3-bi -o jsonpath='{.status.readyReplicas}'` -> `1`; ANALYST (c) proof is run at S13 (below)
 - Rollback: delete the Deployment and PVC in `rd-iroha3-bi` (new empty store; deleting the PVC is user-only); driver image pin as in S10
 - Sources: `iroha@071e281e:crates/iroha_data_model/src/nexus/private_settlement.rs:2127-2129,2222-2227`; `crates/iroha_core/src/private_settlement/state.rs:1118`; `iroha3-rd-dfabi@bc55e68:deploy/k8s-apps/bi-auditor.yaml:8-10,21-28,89,110`
 
-### S12: Auditor orgs 2 and 3 (k-of-n)
+### S12: Auditor orgs A and B (k-of-n, 2-of-3 decided)
 - DELTA: 5 -> AFTER row: "Default proposed: 2-of-3 (BI, org 2, org 3) ... 2-of-2 is the minimum"
-- Owner: lead  Size: M
-- Prerequisites: S11; user decision ADR 0002
-- Flags: BLOCKED(Iroha auditor orgs 2 and 3), CLUSTER-OP
-- Does: nothing until the user picks. After the pick: official `iroha nexus private-settlement audit-online` run by each extra org with its own signing + hybrid key and business policy allowlisting all four sponsors; the namespace naming rule has no slot for these orgs, `lead` names them with the decision. The decided k and n go into S13's pool activation. ADR 0002 option "keep 1-of-1" stays the user's choice, not a deviation from the AFTER.
+- Owner: iroha (build), lead (GO)  Size: M
+- Prerequisites: S11; decided 2026-11-12: 2-of-3 with orgs A and B (README row 19, user via analyst), ADR 0002 option closed
+- Flags: CLUSTER-OP
+- ANALYST (2026-11-12, delegated by the user, via lead): iroha 2-of-3 auditors orgs A + B (README row 19) are BUILT as steps S11 -> S12 -> S13, no deviation (source `iroha@071e281e` `crates/iroha_data_model/src/nexus/private_settlement.rs:2224-2227`, `crates/iroha_core/src/private_settlement/state.rs:1118`; ARCHITECTURE-iroha3 hard limit 3). Conditions: (a) each auditor key is generated and held ONLY in its own org namespace (`rd-iroha3-bank-a`, `rd-iroha3-bank-b`), never on the Lensa host; (b) it does not block zeto S21 and runs in the iroha track BEFORE the Lensa keyless cutover; order: epoch read -> S18 window A (D-native, no auditor) -> S10 sponsor + S11 `policy_from_config` code -> S12 auditor keys A/B in-namespace -> S13 pool activation -> APS flows -> Lensa cutover; (c) RED proof: BI auditor offline + A and B approve -> the settlement commits; only 1 approval -> NOT committed; (d) residual recorded: A and B are also trading parties (an auditor approves its own leg), so 2-of-3 still needs a second independent approver.
+- Does: after the S11 policy code: official `iroha nexus private-settlement audit-online` run by each extra org with its own signing + hybrid key and business policy allowlisting all four sponsors; the namespace naming rule has no slot for these orgs, `lead` names them with the decision. The decided k and n go into S13's pool activation. ADR 0002 option "keep 1-of-1" stays the user's choice, not a deviation from the AFTER.
 - RED proof: `jq '.auditors|length, .min_approvals' <policy>` -> the chosen n and k (e.g. `3` and `2`); a settlement with one auditor stopped -> still `finalized` for k-of-n with k < n
 - Rollback: stop the extra auditors (no pool exists yet; S13 not started)
 - Sources: `iroha@071e281e:crates/iroha_cli/README.md:194-256`; `specs/private_settlement.md:296-340,353-392`
@@ -161,7 +163,9 @@ Peer keys and addresses come before the nodes (genesis needs `pop_hex` and the p
 - DELTA: 6 -> AFTER row: "Alternative: new pools at re-genesis with the k-of-n policy from the start"
 - Owner: iroha  Size: M
 - Prerequisites: S11, S12 (decided)
-- Flags: CLUSTER-OP, BLOCKED(Iroha auditor orgs 2 and 3) inherited from S12
+- Flags: CLUSTER-OP
+- ANALYST (2026-11-12, delegated by the user, via lead): iroha 2-of-3 auditors orgs A + B (README row 19) are BUILT as steps S11 -> S12 -> S13, no deviation (source `iroha@071e281e` `crates/iroha_data_model/src/nexus/private_settlement.rs:2224-2227`, `crates/iroha_core/src/private_settlement/state.rs:1118`; ARCHITECTURE-iroha3 hard limit 3). Conditions: (a) each auditor key is generated and held ONLY in its own org namespace (`rd-iroha3-bank-a`, `rd-iroha3-bank-b`), never on the Lensa host; (b) it does not block zeto S21 and runs in the iroha track BEFORE the Lensa keyless cutover; order: epoch read -> S18 window A (D-native, no auditor) -> S10 sponsor + S11 `policy_from_config` code -> S12 auditor keys A/B in-namespace -> S13 pool activation -> APS flows -> Lensa cutover; (c) RED proof (run here): BI auditor offline + A and B approve -> the settlement commits; only 1 approval -> NOT committed; (d) residual recorded: A and B are also trading parties (an auditor approves its own leg), so 2-of-3 still needs a second independent approver.
+
 - DECIDED (2026-11-12 ~04:45 CST (orchestrator; user statement ~04:30: Lensa is the test UI for every platform)): no seeded test balances by engineers beyond the genesis the PLAN defines (validator stakes, pools, governance accounts); the "BI mints test balances" part below happens via Lensa in qa.
 - Does: with the BI governance account (S3) run driver `pool-init` for `rd` and `dfabi` (`ActivatePrivateSettlementPoolV1`; `activation_height = 11`, `minimum_activation_notice_blocks = 10` from `nexus.toml:98-105`) with the `min_approvals` and `auditors` S12 decided; the chain is new, so DELTA 6's alternative applies (new pools carry k-of-n from the start, no later rotation, old pools on the old chain are not rotated). Then BI mints test balances to the four accounts (`CanMintAssetWithDefinition`).
 - RED proof: driver `pool-history --asset rd` -> line `pool_history asset=rd epoch=<n> leaves=<m> root=<hex>` for both assets (CURRENT.md section 3 shows the format; initial values [unverified]); before: `pools.json` absent
