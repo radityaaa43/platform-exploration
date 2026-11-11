@@ -50,3 +50,14 @@ Lines: `L6 zeto BAL-P1`, `BAL-issue`, `BAL-award`, each PASS/FAIL/SKIP.
 | D3 | `kubectl -n rd-zeto-<p> get secret -o name` (names only): `besu-nodekey` and the Paladin key Secret in each namespace; public identities pairwise distinct | distinct x4 | any equal |
 | D4 | `can-i get secrets` across all 12 ordered pairs of `party-admin` = `no`; `kubectl --kubeconfig <Lensa host file> auth can-i '*' '*' --all-namespaces` = `no` or the file absent (after S20) | all `no` | any `yes` |
 | D5 | W4 (after S5b only; before it `NOT-RUN`): during the stop the other three validators' `eth_blockNumber` keeps rising; after restore all four within 2 | pass | blocks stall |
+
+## 8. Four-of-four matrix (`L6-COMMON.md` section 7; run first)
+| Component (per party) | Where to read | Cells |
+|---|---|---|
+| QBFT consensus node | sts `besu-validator` in `rd-zeto-<p>` (n=8 before S5b: also the old `besu` ns validators, which do not count toward 4/4) | 4 |
+| Paladin node | sts `paladin-node<N>` (CR `node<N>`) in `rd-zeto-<p>` | 4 |
+| Paladin Postgres | `paladin-pg` in `rd-zeto-<p>` | 4 |
+| keys | Secrets `besu-nodekey`, `node<N>.keys` (names only) | 4 |
+| gateway + OPA | `bank-gw-<N>` (Ready, OPA sidecar or pod) | 4 |
+| bundle server | `bundle-server` per party `[unverified: BI only today; if it runs only in rd-zeto-bi, record PARTIAL, not 4/4]` | 4 |
+Placement: BI, A, B `ap-southeast-5`; C `ap-southeast-1`. Line `L6 zeto 4OF4`.

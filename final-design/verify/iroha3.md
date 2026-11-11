@@ -44,3 +44,13 @@ Any single peer down stops user txs; an auditor down means no Prepare (A:118-120
 | D3 | no shared key: Secret names per namespace (`bi-auditor-key` keys `bi-auditor.hybrid`, `bi-auditor.seed` only in `rd-iroha3-bi`, key names only); mint-finality keys are per-org triples; public identities pairwise distinct | distinct x4 | an equal identity |
 | D4 | 12 ordered `can-i get secrets` = `no`; Lensa host holds no cluster-admin | as stated | any `yes` |
 | D5 | all four `p2p` Services: ACL annotations on (`status on`, `type white`, one `id` per cluster) and the netpol `100.64.0.0/10` element present and its own element; positive control (peer cluster egress connects) before negative | per `deviation-LB.py` | an ACL missing |
+
+## 8. Four-of-four matrix (`L6-COMMON.md` section 7; run first)
+| Component (per party) | Where to read | Cells |
+|---|---|---|
+| consensus peer | the Iroha peer pod in `rd-iroha3-<p>` (not Running before S7: then FAIL/NOT-RUN with the reason) | 4 |
+| driver (client) | the driver pod/Job in `rd-iroha3-<p>` `[unverified]` | 4 |
+| keys | per-party key Secrets (names only; `bi-auditor-key` in `rd-iroha3-bi`) | 4 (BI auditor key 1) |
+| gateway + OPA | per party gateway | 4 |
+| bundle server | per party `[unverified]` | 4 |
+RD/DFABI are in genesis (one instance). Placement: BI, A, B `ap-southeast-5`; C `ap-southeast-1`. Line `L6 iroha3 4OF4`.

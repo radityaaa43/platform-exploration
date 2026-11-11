@@ -44,3 +44,17 @@ Before: signer Ready, `GET /api/network?model=stealth`. During W2: `POST /api/tx
 | D4 | 12 ordered `can-i get secrets` = `no`; `create pods --subresource=exec` = `no` except the named `pods/vault-0` rule; no cluster-admin on the Lensa host | as stated | any `yes` |
 | D5 | `deployerKey` retired (S15): the old holder's roles removed (user-only; qa reads the state after) | removed | role remains |
 | D-tail | W4: others unaffected | pass | other parties fail |
+
+## 8. Four-of-four matrix (`L6-COMMON.md` section 7; run first)
+| Component (per party) | Where to read | Cells |
+|---|---|---|
+| consensus node | the zeto validators `besu-validator` in `rd-zeto-<p>` (the chain); stealth adds none | 4 |
+| `besu-rpc` | sts `besu-rpc` in `rd-stealth-<p>` | 4 |
+| signer + scanner | the party's signer and scanner `[unverified: S10; BI signer exists only after S10; banks' signing is per bank]` | 4 |
+| keys | `besu-rpc-nodekey`, `stealth-rpc-jwt` (names only), the party's signer key Secret | 4 |
+| gateway + OPA | `st-gw-<N>` | 4 |
+| bundle server | per party `[unverified]` | 4 |
+Placement: BI, A, B `ap-southeast-5`; C `ap-southeast-1`. Line `L6 stealth 4OF4`.
+
+## 9. Standing condition: `stealth-viewkey-compare` (ANALYST, via lead 2026-11-12; active once the S11 CronJob is live)
+At EVERY window start, until BI's Lensa lens shows the job status, qa quotes the last run of the CronJob `stealth-viewkey-compare` in `rd-stealth-bi`, read-only: Job name, completion time, result, and the 4 per-party lines (each `OK`, `MISMATCH`, `unregistered` or `bad_copy`). Commands: `kubectl -n rd-stealth-bi get cronjob stealth-viewkey-compare -o jsonpath='{.status.lastSuccessfulTime}'`; `kubectl -n rd-stealth-bi get jobs -l <label> --sort-by=.status.startTime` `[unverified: label]`, the last Job's `.status.succeeded`; `kubectl -n rd-stealth-bi logs job/<name>` (the 4 lines are not secrets; a line that would print a key is FAIL of the job output and is not quoted). PASS to start: last run completed, result success, all four lines `OK`. Any `MISMATCH`, `unregistered` or `bad_copy`: stop and report, because a bank re-registering a viewing key blinds BI (A:133). Line `L6 stealth VIEWKEY: PASS|FAIL <job, time, 4 lines>`.
