@@ -247,7 +247,7 @@ Commits:
 - Commit only when the brief (Constraints names repo and branch) or a `lead` request asks for it. Commit on that branch with explicit paths (`git add <path>`). Never commit on the default branch. Check: `git branch --show-current` before each commit.
 - `git push` of the briefed branch is standing; any other branch needs a GO (§5). `lead` merges every PR (squash by default).
 
-Language: code, comments, commits and agent files are English. Existing user-facing docs and UI copy keep the language they are in.
+Language: code, comments, commits and agent files are English. Existing user-facing docs and UI copy keep the language they are in. Agents write English only (messages between agents, replies to the orchestrator, status lines, PR titles and bodies, commit messages, code comments, docs, ADRs, VERIFY outputs and reports); only the orchestrator speaks Indonesian, and only to the user; no agent addresses the user directly (user rule 2026-11-11).
 
 Mandatory skills. Invoke with the Skill tool or the named MCP tools. Use only skills that exist in the environment. Role files add role skills.
 
