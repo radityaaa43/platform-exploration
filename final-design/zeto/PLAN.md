@@ -236,7 +236,7 @@ Reused by noto-pente and stealth: S1-S5 (namespace pattern, validator per bank),
 - Rollback: none after delete; restore the named backup `zeto-decom-<date>` (manifests, dumps, PV snapshots) into S8 and the retained Besu PVs; seeds and CA keys come from each party's own copy (S6, S17), never from a shared backup.
 - Sources: CURRENT.md section 11; LENSA.md section 6.
 
-## DEVIATION REQUEST (draft for lead; to `analyst`, asking for DELTA addenda)
+## DEVIATION REQUEST (sent to `analyst`, copy `orchestrator`, 2026-11-11 by `lead`; the user decides on disagreement)
 1. S3/S4: AFTER 2a "30303 TCP+UDP" vs plan "TCP-only LoadBalancer, `discovery-enabled=false`, `static-nodes-file`". Reason (Besu docs, unversioned): UDP carries discovery only, static-nodes peers dial by TCP, and a mixed TCP+UDP LoadBalancer on this provider is [unverified]. DNS in an enode stays early access (`--Xdns-enabled`), so cluster 2 uses LB IPs. The Xdns read in S3 is a read-only prerequisite.
 2. S15: AFTER DELTA 8 / 2 "report groups {bank, BI}" is narrowed: `externalCallsEnabled` is only recorded, the three live groups are immutable and keep `true`.
 3. S12: replacing the proving keys in the Paladin image is a rebuild of the fork image, which the user's "no new custom code" rule may exclude; the AFTER row "proving keys from a ceremony" is unchanged, the route is undecided.
