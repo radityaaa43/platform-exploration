@@ -159,6 +159,7 @@ Peer keys and addresses come before the nodes (genesis needs `pop_hex` and the p
 - Owner: iroha  Size: M
 - Prerequisites: S11, S12 (decided)
 - Flags: CLUSTER-OP, BLOCKED(Iroha auditor orgs 2 and 3) inherited from S12
+- DECIDED (2026-11-12 ~04:45 CST (orchestrator; user statement ~04:30: Lensa is the test UI for every platform)): no seeded test balances by engineers beyond the genesis the PLAN defines (validator stakes, pools, governance accounts); the "BI mints test balances" part below happens via Lensa in qa.
 - Does: with the BI governance account (S3) run driver `pool-init` for `rd` and `dfabi` (`ActivatePrivateSettlementPoolV1`; `activation_height = 11`, `minimum_activation_notice_blocks = 10` from `nexus.toml:98-105`) with the `min_approvals` and `auditors` S12 decided; the chain is new, so DELTA 6's alternative applies (new pools carry k-of-n from the start, no later rotation, old pools on the old chain are not rotated). Then BI mints test balances to the four accounts (`CanMintAssetWithDefinition`).
 - RED proof: driver `pool-history --asset rd` -> line `pool_history asset=rd epoch=<n> leaves=<m> root=<hex>` for both assets (CURRENT.md section 3 shows the format; initial values [unverified]); before: `pools.json` absent
 - Rollback: none after activation (pools are on-chain); the whole new chain is dropped by deleting S7/S8 objects (StatefulSets and PVCs: user-only) before S16
