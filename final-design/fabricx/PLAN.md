@@ -215,6 +215,7 @@ Key fact for the order: any change of an Arma party address or any new CA/MSP me
 - Sources: CURRENT.md section 11; ARCHITECTURE 2.2
 
 ### S21: Retire multiregion namespaces
+- DECIDED (2026-11-11 ~23:45 CST, user-delegated decision via the analyst (pins besu 26.8.1 d97cbd61, paladin v1.0.0 6d4b913)): `fabricx-bi`, `fabricx-bank-a`, `fabricx-bank-b`, `fabricx-bank-c` on cluster 1 are OUT OF SCOPE: another team's stack (KPID-poc / Rupiah-Digital-Eksplorasi platforms/fabric-x). No workload reads, no delete, removed from every list. This step is VOID. Old `fabricx` (ours): mode "bertahap": its 28 PVs patched to Retain 2026-11-11 (list in rd-fabric-x operator notes); named backup + restore test; delete only after the new stack passes VERIFY for Lensa (S22).
 - DELTA: 12 -> AFTER row: "RETIRE as a stack, KEEP as pattern source"
 - Owner: lead  Size: S
 - Prerequisites: S20, ADR 0002 (user)
