@@ -9,7 +9,7 @@ Assumption A2: the chain stays the same (validators join by vote, DELTA 2) and e
 Preserve (every step): privacy groups keep 100% endorsement (`paladin@v1.0.0:domains/pente/src/main/java/io/kaleido/paladin/pente/domain/PenteDomain.java:101-103`); no custom Paladin code (running fork digest unchanged); amounts are integer units, `PRICE_PER_UNIT = 1_000_000n` (`frontend@28c8bdb:server/src/domain.ts:14`).
 
 ## Order and dependencies
-1. S1 (none, read-only, before any Z-* step)  2. zeto S1+S2  3. zeto S3-S5  4. zeto S8+S9 after S1  5. S2 after S1,zeto S8+S9  6. S3 after zeto S8+S9  7. S4 (BLOCKED upstream)  8. S5 (BLOCKED user)
+1. S1 (none, read-only, before any zeto step)  2. zeto S1+S2  3. zeto S3-S5  4. zeto S8+S9 after S1  5. S2 after S1,zeto S8+S9  6. S3 after zeto S8+S9  7. S4 (BLOCKED upstream)  8. S5 (BLOCKED user)
 9. zeto S10 (blocked in zeto plan by the same ADR)  10. S6 after zeto S8+S9  11. S7 after S2,S6,zeto S10  12. S8 after S1 (code only, any time before S13)  13. S9 after S7
 14. S10 after zeto S16+S17  15. S11 (code only, any time before S12)  16. S12 after S10,S11,zeto S19+S20  17. S13 after S7,S8,S12  18. S14 after S8,S13 (BLOCKED user)  19. S15 LAST after S13 and the zeto and stealth cutovers
 
