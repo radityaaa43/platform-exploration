@@ -8,10 +8,10 @@ Shared with zeto (referenced by zeto S id, not repeated): validators and chain d
 
 ## Order and dependencies
 1. S1 after zeto S1  2. S2 after zeto S2  3. S3 after zeto S5  4. S4 after S1,S3  5. S5 after S2,S4 and zeto S4  6. S6 after S4
-7. S7 after S1,S2 (user product choice)  8. S8 after S7  9. S9 after S5,S7,S8  10. S10 after S4,S7,S8  11. S11 after S9,S10
-12. S12 after ADR 0001  13. S13 after ADR 0002 and S12  14. S14 after ADR 0003
+7. S7 after S1,S2 (user product choice)  8. S8 after S7  9. S9 after S5,S7,S8  10. S10 after S4,S7,S8  11. S11 after S9,S10,S18
+12. S12 after ADR 0001  13. S13 after ADR 0002 and S12  14. S14 after ADR 0003,S20,S21
 15. S17 after S4,S5,S9,S10 and zeto S16,S17  16. S18 after S8  17. S19 after S17,S18 and zeto S19,S20  18. S20 after S9,S10,S11,S17,S19 (+ S12/S13 if their ADR changes the flow)
-19. S21 after S20  20. S15 after S21,S12 (+S13,S14 if decided)  21. S16 after S4 (optional)  22. S22 after S20 and the zeto and noto-pente cutovers (LAST)
+19. S21 after S20  20. S15 after S21,S12 and the zeto registrant confirmation (+S13,S14 if decided)  21. S16 after S4 (optional)  22. S22 after S20 and the zeto and noto-pente cutovers (LAST)
 
 ## Steps
 ### S1: Per-party namespaces on cluster 1
@@ -38,7 +38,7 @@ Shared with zeto (referenced by zeto S id, not repeated): validators and chain d
 - DELTA: 5 -> AFTER row: "Each bank runs its own Besu validator with a node key it generated"
 - Owner: besu  Size: S
 - Prerequisites: zeto S5 (this plan adds no validator pod: one validator per bank, shared by zeto, noto-pente and stealth)
-- Flags: none
+- Flags: user-only (the vote-out of the old validators is zeto S5b: user-only, waits for VERIFY)
 - Does: nothing is deployed. After zeto S5 record in CURRENT.md the validator-to-party mapping by namespace (`rd-zeto-<party>` pod `besu-validator-0`): it replaces the ARCHITECTURE inference "1=BI 2=A 3=B 4=C" (netpol guess, UNVERIFIED) with a fact. Old `besu` validators stay running until S22 (stealth still reads through them until S20).
 - RED proof: through port-forward to each `besu-validator-0` (admin RPC is denied through the OPA door, CURRENT section 1): `qbft_getValidatorsByBlockNumber latest` before = `0xe89105d4…25d0 0x712f8366…69fd 0x95197d60…a715 0xd27cb197…38d9f3`, after = 4 addresses none of them old, each equal to `besu-node-address` of one party ns.
 - Rollback: none needed (read-only); zeto S5 rollback governs.
@@ -47,8 +47,8 @@ Shared with zeto (referenced by zeto S id, not repeated): validators and chain d
 ### S4: Besu RPC node per party on cluster 1 (non-validator, JWT)
 - DELTA: 6 -> AFTER row: "Separate non-validator node per org; JWT permissions eth/net/web3"
 - Owner: besu  Size: M
-- Prerequisites: S1, S3 (needs the zeto `besu-p2p` addresses, S3 of zeto)
-- Flags: CLUSTER-OP
+- Prerequisites: S1, S3 (needs the zeto `besu-p2p` addresses, S3 of zeto); read-only capacity check first (free disk-attach slots and node memory on cluster 1, as zeto S1)
+- Flags: CLUSTER-OP, spend, user-only (40Gi PVC per party)
 - Does: in each of the three ns: ConfigMap `besu-genesis` byte-identical to live `besu-genesis`; ConfigMap `besu-rpc-config` copied from live `besu-node-validator-1-besu-config` with `rpc-http-api=["ETH","NET","WEB3"]`, `rpc-http-authentication-enabled=true`, `rpc-http-authentication-jwt-public-key-file=/jwt/public.pem`, `host-allowlist=["st-gw","besu-rpc"]` names of this ns's gateway and signer Services, `rpc-http-cors-origins` removed, `rpc-ws-enabled=false`, `metrics-host="127.0.0.1"`, `sync-mode="FULL"`, `static-nodes-file` = the 4 zeto `besu-p2p` addresses (this node is not in the validator set; its own node key is generated in the ns). StatefulSet `besu-rpc` image `hyperledger/besu:26.8.1`, PVC 40Gi `alicloud-essd` (re-syncable, Delete is acceptable); the JWT keypair (RS256 or ES256, Besu docs) is generated inside this step into Secret `stealth-rpc-jwt` (names only; public key mounted into `besu-rpc`, private key readable only by the token minter). Tokens carry `exp`, so a minting helper is a runtime dependency: project code inside the signer (S9); for the S4 and S6 proofs the operator mints a one-off token from the Secret inside the window. NetworkPolicy: 8545 only from pods `app=st-gw` and `app=stealth-signer` of this ns; cross-plan line: zeto S3 policy: allow 30303 from `rd-stealth-<party>` rpc node (new node dials the validator; today 30303 is allowed only from validators). Why a separate node: Besu JWT `permissions` are per token (`eth:*`, `*:*`) but `rpc-http-authentication-enabled` is endpoint-wide, so a token-protected validator would force tokens on zeto's Paladin `baseLedgerEndpoint` and on zeto S5 `qbft_proposeValidatorVote` calls, and whole-history `eth_getLogs` view-tag scans would load a consensus node (1 pod + 40Gi per party).
 - RED proof: before `kubectl -n rd-stealth-bank-a get sts besu-rpc` -> `NotFound`; after, by port-forward: `eth_chainId` with a valid JWT (one-off token minted from `stealth-rpc-jwt`) -> `0x539`, `eth_blockNumber` within 2 blocks of `rd-zeto-bi` validator; no token -> HTTP `401`; `admin_peers`, `debug_traceTransaction`, `perm_getNodesAllowlist` with a valid `eth:*,net:*,web3:*` token -> error (API not enabled); `net_peerCount` >= `0x3`. Exact 401 body [unverified].
 - Rollback: delete sts, pvc, ConfigMaps, Secret `stealth-rpc-jwt` in `rd-stealth-<x>`; remove the added 30303 rule in zeto's ns.
@@ -57,15 +57,15 @@ Shared with zeto (referenced by zeto S id, not repeated): validators and chain d
 ### S5: Besu RPC node for bank C on cluster 2
 - DELTA: 10, 6 -> AFTER row: "Cross-cluster limits: p2p across clusters via static nodes"
 - Owner: besu  Size: M
-- Prerequisites: S2, S4; zeto S4 (cluster-1 p2p addresses reachable from cluster 2; the network path is [unverified], the RED proof decides)
-- Flags: CLUSTER-OP
+- Prerequisites: S2, S4; zeto S4 (cluster-1 p2p addresses reachable from cluster 2; the network path is [unverified], the RED proof decides); read-only capacity check first (cluster-2 node memory and disk slots)
+- Flags: CLUSTER-OP, spend, user-only (40Gi PVC on cluster 2)
 - Does: in `rd-stealth-bank-c` the same objects as S4; `static-nodes-file` = zeto `besu-p2p` addresses of cluster 1 plus bank C's own validator in `rd-zeto-bank-c`; requests set on every container (cluster-2 memory is tight, ARCHITECTURE 2a); no LoadBalancer (outbound dial only; adding the 30303 rule in `rd-zeto-bank-c` as in S4).
 - RED proof: `eth_chainId` with JWT -> `0x539`; `net_peerCount` >= `0x3`; `eth_blockNumber` within 2 blocks of cluster 1; before: no pod in `rd-stealth-bank-c`.
 - Rollback: delete sts, pvc in `rd-stealth-bank-c`.
 - Sources: ARCHITECTURE 2a "Cross-cluster limits" 1-2 (latency 15-30 ms vs 2 s / 4 s, no tunable changes); Besu `public-networks/how-to/connect/static-nodes`, `specify-nat`.
 
 ### S6: Record the DFABI scale evidence (no code change)
-- DELTA: none (correctness record, analyst adds the addendum) -> AFTER row preserved: "DfabiBond ... as they are" (units untouched)
+- DELTA: none (correctness record, analyst adds the addendum) -> AFTER row preserved: "No new contract design; only role holders move." (ARCHITECTURE-stealth.md:66; units untouched)
 - Owner: qa  Size: S
 - Prerequisites: S4 (read through the new RPC node with a read-only `eth:*` token minted from Secret `stealth-rpc-jwt` as in S4; the earlier check failed at the old mTLS door, LENSA.md section 3)
 - Flags: none
@@ -85,12 +85,12 @@ Shared with zeto (referenced by zeto S id, not repeated): validators and chain d
 - Sources: ARCHITECTURE 2 row "Bank keys" and hard limit 6 (inference from the EIP formula, not tested); EIP-5564 "Private key derivation"; Besu use-besu-api "Account management".
 
 ### S8: stealth-signer service (code): intents in, signed tx out, own-key scan
-- DELTA: 1, 2 -> AFTER row: "Bank client signs and submits; Lensa builds unsigned intents" (DELTA 1) and "Bank scanner with own viewing key" (DELTA 2)
+- DELTA: 1, 2, 4 -> AFTER row: "Bank client signs and submits; Lensa builds unsigned intents" (DELTA 1), "Bank scanner with own viewing key" (DELTA 2), bank client sends cert request (sender, payload, expiry) to the custodian (ARCHITECTURE-stealth.md:106,178)
 - Owner: besu  Size: L
 - Prerequisites: S7
 - Flags: none (image build only, no cluster)
-- Does: new dir `besu@9890701:stealth-address/signer/` reusing `ts/stealth.ts` (`deriveStealth`, `scan`, `scanView`), `ts/chain.ts`, `ts/bond.ts` (`signCertificate`:71): HTTP API `POST /intent` (kind rd-transfer, bond-transfer, dvp-leg; Lensa sends public meta-address + amount, never a key), `GET /holdings`, `GET /history` (own-key scan of `Announcement` logs from own RPC with JWT, view tag first), `POST /cert` (role `custodian` only, enabled by S12). Keys read from S7; submits `eth_sendRawTransaction` to the own RPC node; per-party config rejects an intent whose `from` party is not the configured party. Port of the pool and `sent`/`escrowed` records of ONE party into the service's own volume.
-- RED proof: `cd besu/stealth-address && npx vitest run signer` before: `No test files found` (exit 1); after: all pass, including (1) rd-transfer intent -> signed raw tx whose recovered `from` equals the derived stealth address, (2) intent naming another party -> rejected, (3) `GET /holdings` equals `scan()` on the same fixture, (4) no response body or log line contains a key value (grep of the test log). `tsc --noEmit` clean (the package `test` script runs it).
+- Does: new dir `besu@9890701:stealth-address/signer/` reusing `ts/stealth.ts` (`deriveStealth`, `scan`, `scanView`), `ts/chain.ts`, `ts/bond.ts` (`signCertificate`:71): HTTP API `POST /intent` (kind rd-transfer, bond-transfer, dvp-leg; Lensa sends public meta-address + amount, never a key), `GET /holdings`, `GET /history` (own-key scan of `Announcement` logs from own RPC with JWT, view tag first), `POST /cert` (role `custodian` only, enabled by S12). Keys read from S7; submits `eth_sendRawTransaction` to the own RPC node; per-party config rejects an intent whose `from` party is not the configured party. Port of the pool and `sent`/`escrowed` records of ONE party into the service's own volume. Bank-side cert-request client (project code in the signer/gateway): for DFABI transfers, bond funding and DvP legs it sends (sender, payload, expiry) over mTLS to BI's (custodian's) `/cert` and attaches the returned certificate to the raw tx.
+- RED proof: `cd besu/stealth-address && npx vitest run signer` before: `No test files found` (exit 1); after: all pass, including (1) rd-transfer intent -> signed raw tx whose recovered `from` equals the derived stealth address, (2) intent naming another party -> rejected, (3) `GET /holdings` equals `scan()` on the same fixture, (4) no response body or log line contains a key value (grep of the test log), (5) cert-request client: against a stub `/cert` server the request carries (sender, payload, expiry) and the returned cert is attached; the S17 call exercises it live. `tsc --noEmit` clean (the package `test` script runs it).
 - Rollback: `git revert` (new dir only; Lensa still holds keys until S21).
 - Sources: `besu@9890701:stealth-address/ts/stealth.ts:58-80`, `ts/chain.ts:46-49`, `docs/architecture-brief.md:119-123` (key table), `:461`; `frontend@28c8bdb:server/src/adapters/stealth.ts:117-122,195-198,382-386,411`; Besu "Account management" (no `eth_sendTransaction`).
 
@@ -106,11 +106,11 @@ Shared with zeto (referenced by zeto S id, not repeated): validators and chain d
 - Sources: `frontend@28c8bdb:server/src/adapters/stealth.ts:22-24,164,193` (key and pool shapes, `unusedOf`); ARCHITECTURE 2a row "Signer/scanner service"; CURRENT section 4.
 
 ### S10: BI signer + BI scanner in rd-stealth-bi
-- DELTA: 1, 3 -> AFTER row: "BI scanner holds a copy of each bank's viewing key (not spend keys)"
+- DELTA: 1, 3, 8 -> AFTER row: "BI scanner holds a copy of each bank's viewing key (not spend keys)"
 - Owner: besu  Size: M
 - Prerequisites: S4, S7, S8
 - Flags: CLUSTER-OP, user-only (same trust reset as S9 for BI keys)
-- Does: Deployment `stealth-signer` role `bi` and `stealth-bi-scanner` in `rd-stealth-bi`: BI keys `deployerKey` -> `issuerKey` role copy (mint, DFABI issue, DvP RD leg), `biMeta` (BI stealth receive keys); scanner uses `scanView`/`scanAll` with per-bank `viewKey` copies (S11 fills them), never a spend key; BI's store also holds the list of bank identity addresses (the S11 registry lookup key, Key bindings (iii)). Signing role `custodianKey` stays empty until S12 decides the party.
+- Does: Deployment `stealth-signer` role `bi` and `stealth-bi-scanner` in `rd-stealth-bi`: BI keys `deployerKey` -> `issuerKey` role copy (DELTA 8; the key still holds every role until S15) (mint, DFABI issue, DvP RD leg), `biMeta` (BI stealth receive keys); scanner uses `scanView`/`scanAll` with per-bank `viewKey` copies (S11 fills them), never a spend key; BI's store also holds the list of bank identity addresses (the S11 registry lookup key, Key bindings (iii)). Signing role `custodianKey` stays empty until S12 decides the party.
 - RED proof: `GET /holdings` of the BI signer for a BI stealth balance equals Lensa's BI history; a bank `viewKey` loaded without its meta-address is refused (`view key does not match meta-address of <id>`, `ts/stealth.ts:74`); before: no pod in `rd-stealth-bi`.
 - Rollback: delete the Deployments and store entries in `rd-stealth-bi`.
 - Sources: `besu@9890701:stealth-address/ts/stealth.ts:69-81`; `frontend@28c8bdb:server/src/adapters/stealth.ts:117,120-122` (BI wallet and view-key holders); ARCHITECTURE 2 row "BI see all", hard limit 2.
@@ -118,20 +118,20 @@ Shared with zeto (referenced by zeto S id, not repeated): validators and chain d
 ### S11: View-key handover and registry compare job
 - DELTA: 3 -> AFTER row: "BI compares the viewing public key inside each bank's registered meta-address"
 - Owner: besu  Size: M
-- Prerequisites: S9, S10
-- Flags: user-only (each bank operator hands its own view key; no on-chain forcing: hard limit 2)
-- Does: each bank operator copies its `viewKey` (not spend key) into the BI store `stealth-keys/viewcopy-<bank>` by an off-chain channel; CronJob `stealth-viewkey-compare` in `rd-stealth-bi` reads `ERC6538Registry.stealthMetaAddressOf(address(identityKey of <bank>), 1)` (identity list from S10) through the BI RPC node and compares its viewing pubkey with the held copy; a second job watches `StealthMetaAddressSet` events and emits an alert (log line + Lensa health field) on any change. R1 "BI sees all" is detective only: it holds for banks whose current key BI holds.
+- Prerequisites: S9, S10, S18 (Lensa health field `stealth.scanLag`)
+- Flags: CLUSTER-OP (CronJob and event-watch Job in `rd-stealth-bi`), user-only (each bank operator hands its own view key; no on-chain forcing: hard limit 2)
+- Does: each bank operator copies its `viewKey` (not spend key) into the BI store `stealth-keys/viewcopy-<bank>` by an off-chain channel; CronJob `stealth-viewkey-compare` in `rd-stealth-bi` reads `ERC6538Registry.stealthMetaAddressOf(address(identityKey of <bank>), 1)` (identity list from S10) through the BI RPC node and compares its viewing pubkey with the held copy; a second job watches `StealthMetaAddressSet` events and emits an alert (log line + Lensa `/api/health` field `stealth.scanLag`, S18) on any change. R1 "BI sees all" is detective only: it holds for banks whose current key BI holds.
 - RED proof: unit test in `besu/stealth-address` (vitest, fixture with two registered key pairs): matching copy -> `match`, registry key replaced -> `MISMATCH bank-a` (fails before the job exists); live read-only: three banks `match`.
 - Rollback: delete the CronJob and the copies in `rd-stealth-bi`.
 - Sources: EIP-6538 Specification (`stealthMetaAddressOf`, `registerKeys`, event `StealthMetaAddressSet`); EIP-5564 "Stealth meta-address format"; `besu@9890701:stealth-address/src/ERC6538Registry.sol`; ARCHITECTURE 2 row "BI detective check" (layout assumption not executed: UNVERIFIED there).
 
 ### S12: Custodian party and DFABI roles
-- DELTA: 4 -> AFTER row: "Custodian role: not required to be BI; roles that move: owner, minter, controllers, certificate signer, DvPFactory"
+- DELTA: 4, 4a -> AFTER row: "Custodian role: not required to be BI; roles that move: owner, minter, controllers, certificate signer, DvPFactory"
 - Owner: besu  Size: M
 - Prerequisites: ADR 0001 decided, S10
 - Flags: BLOCKED(Stealth custodian party), CLUSTER-OP (live tx in the RED proof, under flock), user-only; BLOCKED(bond controllability, ADR 0004) only for the `renounceControl` option, the move of controllers below stays
-- Does: only after the user picks the party (BI or another). New `custodianKey` in that party's store (S7); with the old signer: `validator.addCertificateSigner(bond, new)`; allowlist the new address if the validator needs it (`addAllowlisted`, `chain.ts:50`: need [unverified]); `bond.transferOwnership(new)`, from the new owner `bond.setControllers([new])` (`ERC1400.sol:745`; keep controllable: `isControllable` is set true in the constructor `:193`, `renounceControl()` is owner-only and irreversible `:710-713`, controller power = `_isControllable && _isController[op]` `:1150`, and `DvPEscrow.sol:131` says a failed bond refund waits for the controller, so removing controllers or renouncing strands refunds: ADR 0004), `bond.addMinter(new)` (`MinterRole.sol:35`); deploy `DvPFactory(new)` and write `deployed.dvpFactory`; old factory and its escrows stay valid. Old deployer roles are removed in S15, not here. `stealth-signer` role `custodian` (S8 `POST /cert`) starts in that party's ns.
-- RED proof: `bond.owner()`, `controllers()`, `isMinter(new)`, `validator.isCertificateSigner(bond, new)` -> new address / true; `DvPFactory(new).custodian()` -> new address; a DFABI transfer with a cert from the new signer settles (qa on a test account); before: all equal `0x4de0…9472`.
+- Does: only after the user picks the party (BI or another). New `custodianKey` in that party's store (S7); with the old signer: `validator.addCertificateSigner(bond, new)`; `validator.addAllowlisted(bond, new)` (`chain.ts:50`, `AllowlistedRole.sol:36`; the allowlist moves with the custodian role, DELTA 4a); `bond.transferOwnership(new)`, from the new owner `bond.setControllers([new])` (`ERC1400.sol:745`; keep controllable: `isControllable` is set true in the constructor `:193`, `renounceControl()` is owner-only, irreversible and not a role move (DELTA 4a) `:710-713`, controller power = `_isControllable && _isController[op]` `:1150`, and `DvPEscrow.sol:131` says a failed bond refund waits for the controller, so removing controllers or renouncing strands refunds: ADR 0004), `bond.addMinter(new)` (`MinterRole.sol:35`); deploy `DvPFactory(new)` and write `deployed.dvpFactory`; old factory and its escrows stay valid. Old deployer roles are removed in S15, not here. `stealth-signer` role `custodian` (S8 `POST /cert`) starts in that party's ns.
+- RED proof: `bond.owner()`, `controllers()`, `isMinter(new)`, `validator.isCertificateSigner(bond, new)` and the allowlist read for new -> new address / true; `DvPFactory(new).custodian()` -> new address; a DFABI transfer with a cert from the new signer settles (qa on a test account); before: all equal `0x4de0…9472`.
 - Rollback: while the old key still holds roles (before S15) the same calls move them back; after S15 none.
 - Sources: `besu@9890701:stealth-address/src/DvPFactory.sol:14-18,30-31`; `src/vendor/universal-token/roles/CertificateSignerRole.sol:33,37`; `ERC1400.sol:31,745`; ARCHITECTURE 2 row "Custodian role", hard limits 3-4.
 
@@ -148,7 +148,7 @@ Shared with zeto (referenced by zeto S id, not repeated): validators and chain d
 ### S14: RD issuer address
 - DELTA: 8 -> AFTER row: "RD: issuer stays BI (immutable)"
 - Owner: besu  Size: L (redeploy) / none (keep)
-- Prerequisites: ADR 0003 decided
+- Prerequisites: ADR 0003 decided AND S20 PASS + S21 (RD redeploy only after the cutover proof)
 - Flags: BLOCKED(RD issuer redeploy), user-only
 - Does: default AFTER = no change, the issuer key moves into the BI store (S10, S15). Only if the user wants a different issuer address: deploy a new `RupiahDigital(issuer_, announcer)` and migrate balances by ordinary stealth transfers (RD has no migration function); not planned further.
 - RED proof: `RupiahDigital.issuer()` -> the BI issuer address from the BI store (default) / the new address (redeploy).
@@ -156,14 +156,14 @@ Shared with zeto (referenced by zeto S id, not repeated): validators and chain d
 - Sources: `besu@9890701:stealth-address/src/RupiahDigital.sol:21,24-25,33-35`; ARCHITECTURE hard limit 5.
 
 ### S15: Retire deployerKey as a shared key
-- DELTA: 8 -> AFTER row: "keeps only the RD issuer role, strip every other role from it"
+- DELTA: 8, 8a -> AFTER row: "keeps only the RD issuer role, strip every other role from it"
 - Owner: besu  Size: S
-- Prerequisites: S21 (Lensa no longer holds it), S12 (roles already moved); no open DvP escrow (a stored certificate from the removed signer would be invalid: `DvPEscrow.sol:131-136`)
-- Flags: user-only (destructive for the old holder)
-- Does: from the old key: `validator.removeCertificateSigner(bond, old)`, `bond.renounceMinter()` (`MinterRole.sol:43`), `InstrumentRegistry.transferOwnership(<BI registrar key>)` (`InstrumentRegistry.sol:68`; the AFTER names no holder for this row: [unverified]); then from the new owner `setRegistrar(old,false)` (the old key is registrar by `chain.ts:51`) and the allowlist removal of the old key (allowlisted by `chain.ts:50`); after that the key is the BI issuer key only (RD `issuer`, immutable).
-- RED proof: `isCertificateSigner(bond, old)` false, `isMinter(old)` false, `bond.owner()` and `controllers()` not old, `InstrumentRegistry.owner()` not old, `isRegistrar(old)` false, the allowlist read for old false, `RupiahDigital.issuer()` unchanged; before: all old = `0x4de0…9472` (CURRENT section 2).
-- Rollback: none after `renounceMinter`; before it, re-add from the new owner.
-- Sources: `besu@9890701:stealth-address/src/vendor/universal-token/roles/{CertificateSignerRole,MinterRole}.sol`; ARCHITECTURE DELTA 8; CURRENT section 10.
+- Prerequisites: S21 (Lensa no longer holds it), S12 (roles already moved); no open DvP escrow (a stored certificate from the removed signer would be invalid: `DvPEscrow.sol:131-136`); zeto registrant: confirm the Zeto instrument entries and the zeto registrar key before S15 (zeto CONTRACTS.md row; the registry is shared: `InstrumentRegistry.sol:7`, `besu@9890701:zeto/spike-zeto-instrument.ts:9`); S15 waits for that confirmation
+- Flags: CLUSTER-OP (live txs from the old key; flock, lead GO), user-only (destructive for the old holder)
+- Does: from the old key: `validator.removeCertificateSigner(bond, old)`, `bond.renounceMinter()` (`MinterRole.sol:43`), and in this order for the registry (DELTA 8a): `InstrumentRegistry.setRegistrar(new,true)` FIRST (`register`/`registerVersion` are `onlyRegistrar`, `InstrumentRegistry.sol:82,96`; only the deployer is registrar today, `ts/chain.ts:51`), then `transferOwnership(new)` (`:68`), new = a BI-party key in the BI party's store, separate from the issuer key; then from the new owner `setRegistrar(old,false)` and the allowlist removal of the old key (allowlisted by `chain.ts:50`); after that the key is the BI issuer key only (RD `issuer`, immutable).
+- RED proof: before the transfer `isRegistrar(new)` true; after: `isCertificateSigner(bond, old)` false, `isMinter(old)` false, `bond.owner()` and `controllers()` not old, `InstrumentRegistry.owner()` not old, `isRegistrar(old)` false, the allowlist read for old false, `RupiahDigital.issuer()` unchanged; before: all old = `0x4de0…9472` (CURRENT section 2).
+- Rollback: the bond owner re-adds a minter (`addMinter`: `onlyMinter` admits the owner, `ERC1400.sol:155-157`, `MinterRole.sol:35`); `setRegistrar(old,true)` by the registry owner restores the old registrar; a removed signer is re-added by a remaining signer.
+- Sources: `besu@9890701:stealth-address/src/vendor/universal-token/roles/{CertificateSignerRole,MinterRole}.sol`; ARCHITECTURE DELTA 8, 8a; CURRENT section 10.
 
 ### S16: Node allowlist (optional hardening)
 - DELTA: 9 -> AFTER row: "Optional local nodes allowlist; no accounts allowlist"
@@ -178,9 +178,9 @@ Shared with zeto (referenced by zeto S id, not repeated): validators and chain d
 ### S17: Stealth gateway and OPA per party
 - DELTA: 6, 7 -> AFTER row: "Gateway + NetworkPolicy: envoy+opa is the only ingress from Lensa"
 - Owner: besu  Size: M
-- Prerequisites: S4, S5, S9, S10; zeto S16, S17 (manifest, per-party mTLS CA, bundle server)
+- Prerequisites: S4, S5, S9, S10; zeto S16, S17 (manifest, per-party mTLS CA, bundle server); read-only: the LB address the LoadBalancer is S17's own gateway Service `st-gw-4` on cluster 2 (spend, user-only); its address is read after creation and quoted in CURRENT.md before the bank-C `/cert` route is configured, quoted in the PR
 - Flags: CLUSTER-OP, spend (LoadBalancer for the custodian cert path)
-- Does: Deployment and Service `st-gw-<N>` (N: 1 BI, 2 A, 3 B, 4 C; the name fits the Publisher guard `^[a-z0-9]+-gw-[1-4]$`, `frontend@28c8bdb:server/src/policy/kube.ts:22`) in each `rd-stealth-<party>` from `besu@9890701:opa/k8s/bank-gw-1.yaml` (namespace lines become the ns); envoy fronts the signer API and the read door of the RPC node (rego `bi.besu` method allowlist unchanged for reads; new package `bank.stealth` for `/intent`, `/holdings`, `/history`, `/cert`: new rego file, not in CURRENT); bundles pulled from zeto S17's `bundle-server` in `rd-zeto-<party>` (cross-ns rule added there). Service for the BI custodian path reachable from cluster 2 (LB address [unverified]). NetworkPolicy: signer API ingress only from `st-gw`.
+- Does: Deployment and Service `st-gw-<N>` (N: 1 BI, 2 A, 3 B, 4 C; the name fits the Publisher guard `^[a-z0-9]+-gw-[1-4]$`, `frontend@28c8bdb:server/src/policy/kube.ts:22`) in each `rd-stealth-<party>` from `besu@9890701:opa/k8s/bank-gw-1.yaml` (namespace lines become the ns); envoy fronts the signer API and the read door of the RPC node (rego `bi.besu` method allowlist unchanged for reads; new package `bank.stealth` for `/intent`, `/holdings`, `/history`, `/cert`: new rego file, not in CURRENT); bundles pulled from zeto S17's `bundle-server` in `rd-zeto-<party>` (cross-ns rule added there). Service for the BI custodian path reachable from cluster 2 (LB address quoted from that prerequisite). NetworkPolicy: signer API ingress only from `st-gw`.
 - RED proof: party B's Lensa client cert on `st-gw-2` -> TLS handshake failure, A's cert -> `GET /holdings` 200; a method outside the allowlist on the read door (`debug_traceTransaction`) -> denied; `/cert` from the bank C signer pod to BI's gateway answers (qa; exercises the custodian key, so it runs only inside this step's CLUSTER-OP window).
 - Rollback: delete the Deployment, Service, Secret in `rd-stealth-<x>`; Lensa still points at the old door until S19.
 - Sources: `besu@9890701:opa/k8s/bank-gw-1.yaml`; `besu@9890701:opa/bundles/bi/bi/besu/besu.rego`; zeto PLAN S16-S17; ARCHITECTURE 2a row "Gateway + NetworkPolicy"; LENSA.md section 1.1.
@@ -190,8 +190,8 @@ Shared with zeto (referenced by zeto S id, not repeated): validators and chain d
 - Owner: fe  Size: L
 - Prerequisites: S8
 - Flags: none (merge and deploy happen in S19 and S20)
-- Does: split `frontend@28c8bdb:server/src/adapters/stealth.ts` (44 KB): keep intent building from public meta-addresses, relay to `st-gw-N`, read model assembled from each party's `/history`; delete the `Wallet(state.deployerKey)` path (`:117`), view-key holders (`:120-122`), `scanOwned` of bank keys (`:164,204,211,284`), `pool` (`:193`), `cert()` calls (`:382-386,411`), `StealthState` key fields (`:22-27`). BI view = BI scanner `/history`; a bank's outsider view comes from that bank's own scanner, not a Lensa key.
-- RED proof: node test with no key fields in `state/stealth.json`: `createStealthAdapter` serves rd-transfer A to B through a stub `st-gw` (fails before: `state.deployerKey` is undefined); `grep -nE "deployerKey|spendKey|viewKey|identityKey|privateKey" frontend/server/src/adapters/stealth.ts` -> 0 hits after (46 lines / 69 occurrences at frontend@28c8bdb before).
+- Does: split `frontend@28c8bdb:server/src/adapters/stealth.ts` (44 KB): keep intent building from public meta-addresses, relay to `st-gw-N`, read model assembled from each party's `/history`; delete the `Wallet(state.deployerKey)` path (`:117`), view-key holders (`:120-122`), `scanOwned` of bank keys (`:164,204,211,284`), `pool` (`:193`), `cert()` calls (`:382-386,411`), `StealthState` key fields (`:22-27`). BI view = BI scanner `/history`; a bank's outsider view comes from that bank's own scanner, not a Lensa key. Sub-step (S11 alert): `/api/health` gains a stealth field `stealth.scanLag` (or equivalent) read from the BI scanner.
+- RED proof: node test with no key fields in `state/stealth.json`: `createStealthAdapter` serves rd-transfer A to B through a stub `st-gw` (fails before: `state.deployerKey` is undefined); `grep -nE "deployerKey|spendKey|viewKey|identityKey|privateKey" frontend/server/src/adapters/stealth.ts` -> 0 hits after (46 lines / 69 occurrences at frontend@28c8bdb before); unit test: `/api/health` carries `stealth.scanLag`, fails before.
 - Rollback: `git revert` (client change only).
 - Sources: `frontend@28c8bdb:server/src/adapters/stealth.ts:22-27,117-122,164,193,382-411`; LENSA.md sections 1.2, 1.4, 1.5; ARCHITECTURE section 2 row "Lensa".
 
@@ -226,14 +226,14 @@ Shared with zeto (referenced by zeto S id, not repeated): validators and chain d
 - Sources: CURRENT section 4; LENSA.md section 1.2 (stealth row).
 
 ### S22: Decommission `besu`, `paladin` (and `dfabi`)
-- DELTA: 7 -> AFTER row: "One admin domain per org ... no shared cluster-admin kubeconfig" (old shared ns removed)
+- DELTA: 7, 7a -> AFTER row: "One admin domain per org ... no shared cluster-admin kubeconfig" (old shared ns removed)
 - Owner: lead  Size: M
 - Prerequisites: SHARED with zeto and noto-pente; executes once, after all three cutovers (zeto S21, noto-pente cutover, S20). Cutover proven (qa PASS on the new namespaces for every flow + the BI-balance proof). Nothing points at the old ns: LENSA.md "Namespace references" rows `paladin`, `besu`, `dfabi` clean (`forwards.conf` 0 lines, no `lensa-pf@*` unit, `kube.ts:3` and `besu-network.ts:20` updated, OPA bundle server and CI: `ci.yml` names no ns); `dfabi` bank backends repointed or retired (user decides). Surviving data copied BEFORE any delete: Besu chain DB `data-besu-node-validator-1..4-0` 4 x 40Gi (PV Retain: kept as is, not a backup) with Secrets `besu-node-validator-N-keys` and CM `besu-genesis`; Postgres of `paladin-node1..4-pgdata` (PV reclaim = Delete, 4 x 20Gi) dumped by the zeto plan as `zeto-decom-pgdump-<date>`; Lensa state files; `~/.opa-keys`, `~/.opa-mtls`; `dfabi` PVs `data-postgres-0`, `runner-state` (Delete, 2 x 5Gi). Stealth adds: `state/stealth.json` `deployed` block saved as named backup `stealth-deployed-<date>` (addresses only, no keys, after S21).
 - Flags: user-only, CLUSTER-OP (own approval at that time), destructive
-- Does: inventory = CURRENT.md section 11 "Decommission inventory": `besu` 4 STS, 4 PVC 40Gi; `paladin` 6 Deployments incl. `bank-gw-1..4`, 4 STS, 4 PVC 20Gi, 43 `smartcontractdeployment`, 3 `paladindomain`, 4 `paladinregistration`, 1 `paladinregistry`; `dfabi` 9 Deployments, 2 PVC. PVC total: 160 Gi Besu + 80 Gi Paladin (+10 Gi dfabi). Stealth deletes nothing alone: the zeto plan re-sets the 4 `paladin` PVs to Retain or copies them first. Cluster-scoped CRDs stay. Cluster 2: nothing is ever deleted.
+- Does: inventory = CURRENT.md section 11 "Decommission inventory": `besu` 4 STS, 4 PVC 40Gi; `paladin` 6 Deployments incl. `bank-gw-1..4`, 4 STS, 4 PVC 20Gi, 43 `smartcontractdeployment`, 3 `paladindomain`, 4 `paladinregistration`, 1 `paladinregistry`; `dfabi` 9 Deployments, 2 PVC. PVC total: 160 Gi Besu + 80 Gi Paladin (+10 Gi dfabi). Stealth deletes nothing alone: the zeto plan re-sets the 4 `paladin` PVs to Retain or copies them first. The `dfabi` namespace is decommissioned only if the user confirms its ownership (TEAM.md §4, DELTA 7a); otherwise it stays. Cluster-scoped CRDs stay. Cluster 2: nothing is ever deleted.
 - RED proof: `kubectl get ns besu paladin` -> `NotFound`; qa re-runs S20 read-only checks on the new namespaces (PASS); the zeto dump restores into a scratch DB (row counts equal) before the delete.
 - Rollback: none after delete; restore `zeto-decom-pgdump-<date>` and the retained Besu PVs / node-key Secrets from the named backup, `stealth-deployed-<date>` for the addresses.
 - Sources: CURRENT.md section 11; LENSA.md section 6; zeto PLAN S22.
 
 ## DEVIATION REQUEST (draft for lead)
-None for the AFTER rows. Two points go to `analyst` with the plan: (1) AFTER 2 row "Custodian role" and DELTA 8 name no holder for `InstrumentRegistry` ownership after the deployer key is stripped (S15 assumes a BI registrar key, [unverified]); (2) the lead brief lists "retire multiregion stack" as an open stealth decision, but ARCHITECTURE-stealth has no such item (it exists only in ARCHITECTURE-fabricx 2.4), so no stealth ADR was written for it.
+None for the AFTER rows. Two points go to `analyst` with the plan: (1) closed by analyst DELTA 8a: the `InstrumentRegistry` holder is a BI-party key separate from the issuer key (S15); (2) the lead brief lists "retire multiregion stack" as an open stealth decision, but ARCHITECTURE-stealth has no such item (it exists only in ARCHITECTURE-fabricx 2.4), so no stealth ADR was written for it.
