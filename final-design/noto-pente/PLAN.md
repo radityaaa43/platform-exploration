@@ -112,7 +112,7 @@ DELTA coverage: 1 -> S2,S3,S4,S11 (+zeto S8+S9); 2 -> zeto S3-S5; 3 -> S6 (+zeto
 - Prerequisites: zeto S16+S17
 - Flags: CLUSTER-OP (Publisher writes `bank-gw-N-bundles` ConfigMaps)
 - Does: bi bundle keeps `bi.noto`, `bi.noto.balance`, `bi.notosetup`, `bi.atom` (CURRENT OPA table); bank bundles carry no Noto package, so bank gateways keep denying Noto-only paths. Per-org gateway only receives its own org's signed bundle (signing keys per owner already exist; where they live after the move is a zeto/lead item, CURRENT section "Signing keys"). Revision shape to reach: `bi-zeto.N-noto.N-...` loaded on all four new gateways.
-- RED proof: `opa check --strict bundles/bi bundles/bank test` and `opa test --coverage bundles/bi bundles/bank test` (`besu@9890701:opa/README.md:114-115`) pass; read-only `bundle-server:sink/proxy/status` shows `noto.<n>` in the `bi` revision for each new gateway (before: new gateways absent).
+- RED proof: `opa check --strict bundles/bi bundles/bank test` and `opa test --coverage bundles/bi bundles/bank test` (`besu@9890701:opa/README.md:114-115`) pass; read-only `GET /sink/status` on each party gateway (zeto S17 route, no API-server proxy, no kube credential) shows `noto.<n>` in the `bi` revision for each new gateway (before: new gateways absent).
 - Rollback: Publisher re-applies the previous bundle revision (ConfigMap kept).
 - Sources: CURRENT.md section "OPA gateways"; `besu@9890701:opa/README.md:114-115`.
 
