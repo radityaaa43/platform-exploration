@@ -19,7 +19,7 @@ Evidence tags in CURRENT.md: `[L]` live read-only command with quoted output, `[
 
 ## Namespaces (lead's naming)
 
-`rd-<platform>-<party>`: platform in `zeto`, `noto`, `stealth`, `fabricx`, `iroha3`; party in `bi`, `bank-a`, `bank-b`, `bank-c`. Twenty namespaces in total. One namespace = one full stack for that party on that platform (consensus node, privacy/domain node, token or settlement service, gateway, OPA, key custody, state). Lensa stays the only shared component, outside these namespaces, as a relay or one client per bank with no bank key (analyst principle 1).
+`rd-<platform>-<party>`: platform in `zeto`, `noto`, `stealth`, `fabricx`, `iroha3`; party in `bi`, `bank-a`, `bank-b`, `bank-c`. Twenty namespaces in total (sixteen if the user takes option A of decision 24: Noto+Pente share the Zeto namespace and Paladin node of each bank; Stealth keeps its own because it has no Paladin node). One namespace = one full stack for that party on that platform (consensus node, privacy/domain node, token or settlement service, gateway, OPA, key custody, state). Lensa stays the only shared component, outside these namespaces, as a relay or one client per bank with no bank key (analyst principle 1).
 
 | Cluster | Parties | Rule |
 |---|---|---|
@@ -78,6 +78,7 @@ Every user-only item from the five plans, with the step it blocks and the defaul
 | 21 | Iroha new genesis = new network_id: balances and the 147 audit records do NOT carry | iroha3 | iroha3 S5 | accept (snapshot old audit store) / keep old chain | accept; old audit store snapshotted before decommission | - |
 | 22 | Bond controllability (`isControllable` true; `renounceControl` is irreversible and strands DvPEscrow refunds that wait for the controller) | stealth | stealth S12 (renounce option only) | keep controllable with the custodian as controller / empty controllers / `renounceControl` | keep controllable, custodian = controller | stealth/adr/0004 |
 | 23 | Decommission the old cluster-1 namespaces after cutover proof (destructive) | all | last step of every plan | per directive | as directed: own CLUSTER-OP at that time, named backup first | - |
+| 24 | Zeto and Noto+Pente: one Paladin node + namespace per bank shared by both (A) or one node + namespace per platform per bank (B). Both are domains of one Paladin node (`paladin@v1.0.0` spec.domains); A halves nodes and keys with no decentralization loss inside one bank; B is the literal reading of "one namespace per bank per platform" | zeto, noto | noto-pente S3/S6/S12 (namespace ids), zeto S1/S9 | A / B | A, recorded as the accepted reading of the topology rule; until decided the noto-pente plan targets the `rd-zeto-<party>` ids | - |
 
 ## How this is reviewed and approved
 
