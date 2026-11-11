@@ -121,7 +121,7 @@ DELTA coverage: 1 -> S2,S3,S4,S11 (+zeto S8+S9); 2 -> zeto S3-S5; 3 -> S6 (+zeto
 - Owner: besu  Size: M
 - Prerequisites: none (code only)
 - Flags: none
-- Does: `nodeConnections` in `besu@9890701:noto+pente/common/src/config.ts:62-70` builds all four clients with one shared mTLS dir (`LENSA_GW_MTLS_DIR`) and an optional `bearer` (:23,53-56). Change: per-node credential source (mTLS dir or bearer per node), defaulting to today's behaviour. `platform.ts:55` keeps one client per node (`executeOutright` needs seller and buyer in one call, LENSA.md section 2); credentials differ per node, keys stay in the nodes.
+- Does: `nodeConnections` in `besu@9890701:noto+pente/common/src/config.ts:62-70` builds all four clients with one shared mTLS dir (`LENSA_GW_MTLS_DIR`) and an optional `bearer` (:23,53-56). Change: per-node credential source (mTLS dir or bearer per node), defaulting to today's behaviour. `platform.ts:55` keeps one client per node (`executeOutright` needs seller and buyer in one call, LENSA.md section 1.5); credentials differ per node, keys stay in the nodes.
 - RED proof: new unit test: node 2 config with a different credential dir produces `clientOptions` whose TLS material differs from node 1; fails before (one dir for all).
 - Rollback: `git revert`.
 - Sources: files above; final-design/LENSA.md sections 1.1-1.2.
