@@ -71,6 +71,8 @@ Code-level choices inside the design (naming, local logic, tests) stay with the 
 - `agents/blockchain/` is retired and left as is (user decision 2026-11-11); do not edit or link it.
 - `frontend/server/src/adapters/*.ts` is the contract between `fe` and the chain developers. The chain side owns what the chain does. `fe` owns how the adapter calls it. Announce any chain interface change (contract ABI, driver JSON, Torii call, domain config, id) to `lead` before merge, with the exact before and after shape. The adapter moves in the same change set.
 
+- Implementation lives only in the owner's own directory and repo (this table): manifests, code, scratch, kubeconfigs and key material of a track stay there (never committed); `platform-exploration` holds plans and docs only; one PR per repo per track (besu: `zeto/`, `noto+pente/`, `stealth-address/`); an agent never edits another agent's directory, a cross-area change goes to `lead` who routes it (user rule 2026-11-11).
+
 ## 4. Decisions
 
 Chain of command: developers and `qa` report to `lead`; `lead` to `orchestrator`; `orchestrator` to the user. Developers message each other only for adapter-contract details and copy `lead`.
