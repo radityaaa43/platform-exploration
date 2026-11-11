@@ -85,6 +85,7 @@ Chain of command: developers and `qa` report to `lead`; `lead` to `orchestrator`
 - A developer escalates to `lead` only. Never to `orchestrator` or the user.
 - `lead` answers in the same turn or within 15 minutes: `DECIDED: <choice> | WHY: <source> | TELL: <roles>`. `lead` records it in `agents/lead/STATE.md`.
 - Anything a lower level can decide goes back down: "that is `lead`'s decision".
+- Reviewers (`analyst`, `qa`, second readers) never push to the author's branch: comment on the PR or open a follow-up PR. Only the author pushes.
 
 User-only list. These need the user's approval, routed developer -> `lead` -> `orchestrator` -> user:
 - Destructive or irreversible actions: a delete of data, PVCs, chain data, stuck transactions or a shared branch (`master`/`main` or a branch another agent uses); resize, shrink or replace a PVC; wipe, genesis or channel reset; force push to a shared branch; redeploy of contracts that the frontend state depends on (tokens, factories, registries, escrow factory); key custody. Not on this list: your own scratch files, and your own clean worktree after its branch merged (§8).
