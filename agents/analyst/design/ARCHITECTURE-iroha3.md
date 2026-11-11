@@ -122,13 +122,80 @@ Finding: protocol routes allow it, library and docs give no way to do it. Status
 5. APS "not production-qualified" (spec `:27-29`); STARK note tree in `driver/src/tree.rs` is custom (crate-private `proof_managed_accumulator.rs`), kept.
 6. `CanReadAllLedgerData`, `CanReadRestrictedDataspace` are genesis-only (`executor.rs:8225-8236`); changing holders means a new genesis.
 
+## 2a. Deployment topology (user decision 2026-11-11)
+
+Rule: one namespace = one full Iroha stack per org (peer, bank client/driver with its own `client.toml` + seed + note key, gateway envoy+opa, PVC); only Lensa is shared. ns-bi also holds the auditor and pool governance. Cluster 1 (Jakarta) = ns-bi, ns-bank-a, ns-bank-b. Cluster 2 (Singapore) = ns-bank-c. Where section 2 says "org box", read "namespace".
+
+```mermaid
+flowchart LR
+  LS["Lensa host: relay + UI, only shared part, NO keys"]
+  subgraph C1["Cluster 1 Jakarta"]
+    subgraph NBI["ns-bi"]
+      GWBI["gateway envoy+opa"] -- "Torii 8080" --> PBI["bi peer + PVC"]
+      AUD["auditor audit-online + auditor key"] ~~~ GOV["governance client"]
+    end
+    subgraph NA["ns-bank-a"]
+      GWA["gateway envoy+opa"] -- "Torii 8080" --> PA["bank-a peer + PVC"]
+      CA["bank-a client: client.toml, seed, note key"]
+    end
+    subgraph NB["ns-bank-b"]
+      GWB["gateway envoy+opa"] -- "Torii 8080" --> PB["bank-b peer + PVC"]
+      CB["bank-b client: client.toml, seed, note key"]
+    end
+  end
+  subgraph C2["Cluster 2 Singapore"]
+    subgraph NC["ns-bank-c"]
+      GWC["gateway envoy+opa"] -- "Torii 8080" --> PC["bank-c peer + PVC"]
+      CC["bank-c client: client.toml, seed, note key"]
+    end
+  end
+  LS -- "relay, no keys" --> GWBI & GWA & GWB & GWC
+  PBI <-- "p2p 1337" --> PA <-- "p2p 1337" --> PB <-- "p2p 1337" --> PBI
+  PC <-- "p2p 1337, cross-cluster" --> PBI & PA & PB
+  CA & CB & CC -- "approval HTTP" --> AUD
+  CC -. "legs, votes: all 4 gateways" .-> GWBI & GWA & GWB
+```
+
+Namespace must contain (per org). Upstream pin `071e281e`; samples `defaults/nexus/config.toml`, `specs/references/peer.template.toml`.
+
+| Item | What goes in the namespace | Citation |
+|---|---|---|
+| Peer `[network]` | `address` = bind `0.0.0.0:1337`; `public_address` = the external address other peers dial (gossiped to others); `[torii] address` `0.0.0.0:8080`. Our generator rewrites these keys only; no `sumeragi` section, so consensus timing is the default | `iroha_config/src/parameters/user.rs:7836-7843`; `defaults/nexus/config.toml:22-27`; `generate.sh:119-134` |
+| `trusted_peers` | `"<bls public key>@<host>:1337"` for all four peers; `trusted_peers_pop` entries define the validator subset (a trusted peer without PoP is an observer). The bank-C address must be reachable from cluster 1 (LB or NodePort: our choice; upstream has no Kubernetes cross-cluster recipe, grep of `docs/`, `configs/`: not found). A DNS name here can follow IP changes if `dns_refresh_interval_ms` is set (off by default) | `user.rs:844-857,8037-8039`; `defaults/nexus/config.toml:9-16`; `generate.sh:105-106` |
+| Genesis topology | Genesis lists `PeerId` = public key only, plus `pop_hex`, no address (`iroha_model_base/src/peer.rs:44-48`; `iroha_genesis/src/lib.rs:3068-3076`). So moving bank C to cluster 2 with the same key needs NO genesis change, only config. Lead's claim "genesis `topology []` avoids a reset": NOT supported. Our `topology: []` is only on the extra transactions (`genesis-rd-dfabi.jq:29,36`; `generate.sh:303,397`); the first transaction comes from `kagami localnet` with the 4 peers (`generate.sh:70-71`); signing requires an exact `3f+1` topology (4..=`MAX_VALIDATORS_PER_HEIGHT`) over all transactions, matching the epoch-zero authority. A roster change needs a new genesis | `iroha_genesis/src/lib.rs:3002-3011,3830-3860` |
+| BLS PoP per peer | Each org makes its own key + PoP; all four `public_key`+`pop_hex` pairs go to every peer and to the genesis signer | spec `:44-46`; `kagami README.md:77-87`; `generate.sh:155-159` |
+| NetworkPolicy | Today: 1337 from same-label pods, 8080 from any pod in the ns (`networkpolicy.yaml:11-22`). Target: peer 1337 from the other three peers (`namespaceSelector` in cluster 1, `ipBlock` for cluster 2 and for cluster-1 egress seen by C); peer 8080 only from the own gateway pod; gateway listener from client and Lensa CIDRs (`ipBlock`). Caveat: LB/NAT may rewrite the source IP and the docs do not define whether before or after policy; test | kubernetes.io/docs/concepts/services-networking/network-policies ("ipBlock", "Cluster ingress and egress mechanisms") |
+| Bank client | `client.toml`: `chain`, `network_id`, `torii_url` (own gateway), `[account] domain/public_key/private_key`; remove the sample `[basic_auth]` table. A client must reach all four Torii endpoints (exactly four, canonical order) | `defaults/client.toml:1-3,9-12`; `generate.sh:147-154`; spec `:296-310`; `driver/src/config.rs:105-123` |
+| Auditor | Only in ns-bi: `iroha nexus private-settlement audit-online` (or today's custom `bi-auditor`); clients POST approval requests from their own ns | `crates/iroha_cli/README.md:194-256`; spec `:296-340`; `aps.rs:384-393` |
+| Key custody | One Secret per ns: `peer-<party>`, `client-<party>` (seed, note key); auditor key only in ns-bi; genesis private key destroyed (DELTA 2) | `deploy/secrets.sh:48-52`; `statefulset.yaml:120-133` |
+
+Rolling restart after a `trusted_peers` change: not documented upstream (grep of `docs/source`: not found). Config is read at start (`crates/irohad/src/main.rs:8657,9101`), `kiso.rs` has no runtime update of it, and only the gossiper updates the live trusted set (`peers_gossiper.rs:1005`). Inferred: edit and restart BI, A, B one by one. Each restart is one peer down = user txs halt while it is the lane author (limit 1). Gossip of a moved peer's address (`peers_gossiper.rs:1-4`) may let the others learn it without edits: not tested.
+
+Relay: upstream has `relay_mode` (`disabled` default = "full mesh expected", `hub`, `spoke`, `assist`) for NAT-constrained peers; spoke/assist need `relay_hub_addresses` (`user.rs:445-458,7844-7855,8338-8342`). Not needed for two reachable clusters; not tested, not used.
+
+### Capacity on cluster 2
+
+Bank C goes only into NEW namespaces this project creates (naming: lead). The capacity left over is shared with unrelated workloads and is not ours to change. The first write to cluster 2 is a CLUSTER-OP that creates new namespaces only. Peer requests 250m / 1Gi, limits 2000m / 3Gi, PVC 5Gi (`statefulset.yaml:66-71,133`); client + gateway are small. Bank-C Iroha share ≈ 3 to 4 pods, ≈ 0.4 vCPU / 1.4 GiB requests (CLUSTER2-FACTS). Node level: ≈ 9 vCPU / 29 GiB unrequested of ≈ 23.4 vCPU / 53 GiB allocatable, so it fits on paper. Memory is the binding limit (member nodes 76% to 98% used) and the 3 GiB limit overcommits: place the peer on a member node. The base PVC class `alicloud-essd-wffc` (`statefulset.yaml:130`) is not in cluster 2's class list (`alicloud-essd`, `fabricx-essd`): overlay it. Sequence: second, after Besu + Paladin + gateways.
+
+### Cross-region latency
+
+RTT Jakarta to Singapore ≈ 15 ms (measured, API-server path); assume ≤ 30 ms. `block_time_ms` and `commit_time_ms` are not config in this pin (only telemetry metrics, `specs/telemetry.md:509`). Cadence is `block_cadence_ms`, default 1000 ms, signed in genesis and frozen at start (`defaults.rs:4009`; `iroha_data_model/src/parameter/system.rs:356-361`); our `network/` files do not set it (`git grep` at `e2a1794`: only `*_timeout_blocks`, `nexus.toml:103-105`). View-zero round timeout = 10 x cadence = 10 s; retransmit = timeout / 5 = 2 s (`defaults.rs:4011,4013`; `iroha_config/src/parameters/actual.rs:6971-6987`). Margin: 30 ms is 3% of cadence, 0.3% of the round timeout, 1.5% of retransmit; even four sequential round trips (120 ms, my estimate) stay at 12% of one cadence. Result: no change.
+
+### Cross-cluster limits
+
+1. Fixed lane author (`lane_consensus.rs:96-107,854-860`): a cluster 2 outage or a WAN cut stops all user txs; no failover. Two clusters add a failure mode, not tolerance.
+2. Four-validator geometry (spec `:44-46`; `nexus.toml:69`): bank C stays the fourth validator; no fifth peer, so cluster 2 cannot be an extra replica.
+3. Auditor online (`min_approvals >= 1`, `state.rs:1118`): ns-bi auditor must be reachable from cluster 2 clients over the WAN.
+4. Discovery: static `trusted_peers` plus address gossip (`peers_gossiper.rs:1-4`); no DNS-SD or seed-node scheme found.
+5. Per-org leg exchange is still not in upstream (section 2); the topology does not change it.
+
 ## 3. DELTA (numbered)
 
 | # | What | Source | Objective | Files / objects | Cost |
 |---|---|---|---|---|---|
 | 1 | Per-bank key custody. 1a: move `bi-auditor.seed/.hybrid` out of `~/iroha3-keys` into the auditor org only. 1b: each bank keeps only `<party>.seed` + `<party>.note`; Lensa host stops mounting all seeds. 1b is only complete after item 7 (today one process needs payer, recipient, sponsor keys) | `aps.rs:1175-1211,1283-1289`; `pools.rs:388-394`; `iroha3-aps.ts:14`; spec `:324-340` | (b), (c) | `~/iroha3-keys`, Secrets `rd-dfabi-wallets`, `client-bi`, `bi-auditor-key`, `deploy/jobs/scenario.yaml`, `deploy/secrets.sh:48-52` | M |
 | 2 | Per-bank peer key and genesis ceremony: each org runs `kagami keys --algorithm bls_normal --pop`, publishes `public_key` + `pop_hex`; one signer builds genesis from `peers.json` only; destroy genesis private key; each org verifies `kagami genesis validate` + `expected_hash`. Split `generate.sh` into per-party keygen and assembly (assembly already reads peers.json only). Needs re-genesis (new chain id) | `kagami README.md:77-87,223-273`; `generate.sh:65-68,330-397,403-430` | (a) | `network/generate.sh`, `network/public/*`, Secrets `peer-*` | M |
-| 3 | Per-bank cluster/ns: own STS, PVC, Secret `peer-<party>`, own deployer; remove cross-party `secrets get/list` runner role. Cross-org P2P :1337 and Torii :8080 reachability and `trusted_peers` addresses (currently in-ns DNS); NetworkPolicy now allows only same-ns | `statefulset.yaml:56,120-133`; `networkpolicy.yaml:11-22`; `generate.sh:91-110` | (a) | `deploy/k8s/parties/*`, `deploy/runner/rbac.yaml`, overlay per org | L |
+| 3 | Per-bank own namespace (cluster 1: BI, A, B; cluster 2: C, see 2a): own STS, PVC, Secret `peer-<party>`, own deployer; remove cross-party `secrets get/list` runner role. Cross-org P2P :1337 and Torii :8080 reachability and `trusted_peers` addresses (currently in-ns DNS); NetworkPolicy now allows only same-ns | `statefulset.yaml:56,120-133`; `networkpolicy.yaml:11-22`; `generate.sh:91-110` | (a) | `deploy/k8s/parties/*`, `deploy/runner/rbac.yaml`, overlay per org | L |
 | 4 | Own client + sponsor per bank: `client.toml` from the bank's own account key (each already holds 1000 XOR); driver reads `sponsor(<party>)` instead of `"bi"`; BI sponsorship becomes an option. Limited by item 7 for DvP and by companion BI leg for `pay` | `aps.rs:207`; `pools.rs:273,346`; `config.rs:96-102`; `carrier.rs:215`; `genesis-rd-dfabi.jq:26` | (b) | `driver/src/{aps,pools,config}.rs` (existing code, parameterize), Secrets `client-<party>` | M |
 | 5 | Second auditor org, k-of-n. Default proposed: 2-of-3 (BI, org 2, org 3) so one auditor down does not stop settlement; 2-of-2 is the minimum. Policy `min_approvals` and `auditors` from config, not hardcoded 1 and one entry. Org 2 runs official `audit-online` with own keys and business policy (allowlist includes all 4 sponsors). Driver waits for approvals instead of calling one `/approve` | `aps.rs:879-884,384-393`; `data_model .../private_settlement.rs:2127-2129,2222-2227`; `audit.rs:163-173`; `crates/iroha_cli/README.md:194-256` | (c) | `driver/src/aps.rs` (`govern_until`, approve loop), new org deployment, policy files | M |
 | 6 | Rotate existing pools to the new policy: `RotatePrivateSettlementPoolPolicyV1`, new `key_epoch`, revision +1, no pending bundle across the boundary; keep BI retired hybrid key (`--auditor-retired-decryption-key-file`) for old capsules. Alternative: new pools at re-genesis (item 2) with the k-of-n policy from the start | spec `:353-360,375-392`; `isi/private_settlement.rs:49-55`; `nexus.rs:249` | (c) | `pools.json`, BI governance client, `bi-audit-store` PVC | M |
@@ -138,7 +205,9 @@ Finding: protocol routes allow it, library and docs give no way to do it. Status
 | 10 | Lensa moves to per-bank clients and Torii endpoints (no port-forwards to all peers, no host with all keys) | `iroha3-aps.ts:9-10,34-37` | (b) | frontend adapter, `lensa.service` | M |
 | 11 | Drift: re-run S1 and S2b on `be4dd898`; probe upload with one peer down (`aps.rs:374-379` fails on first error) | `aps.rs:374-379`; `agents/analyst/reports/2026-11-11-iroha3-driver-fabricx-bi-down.md` | (a) | scenario Jobs | S |
 
-Sequence under no-custom: 2 and 8 first (one re-genesis), then 3, 5, 6 (or fresh pools), then 4 and 9 and 10. Item 7 is the gate for full (b).
+| 12 | Cluster 2 for bank C: peer `public_address` (LB or NodePort), `trusted_peers` update on all peers (rolling restart BI, A, B), NetworkPolicy `ipBlock`s for 1337 and 8080, bank-C gateway, PVC class overlay. No genesis change (key stays) | 2a; `user.rs:844-857,7840-7843`; `peer.rs:44-48`; `statefulset.yaml:130`; `networkpolicy.yaml:11-22` | (a) | `deploy/k8s/parties/bank-c`, overlay for cluster 2, `generate.sh:105-124` (addresses) | M |
+
+Sequence under no-custom: 2 and 8 first (one re-genesis), then 3, 5, 6 (or fresh pools), then 4 and 9 and 10. Item 12 follows item 3 (bank C last, after Besu and Paladin on cluster 2). Item 7 is the gate for full (b).
 
 ## 4. SOURCES (pin, 2026-11-11)
 
@@ -149,3 +218,5 @@ Sequence under no-custom: 2 and 8 first (one re-genesis), then 3, 5, 6 (or fresh
 - Prior reports: `agents/analyst/reports/2026-11-11-{platform-iroha3,iroha3-driver-fabricx-bi-down,matrix}.md`
 - Live, read-only, `KUBECONFIG=alibaba.yaml`, ns `iroha3`: `get pods,svc,pvc,secret,cm,networkpolicy,jobs,deploy,sts,ingress` (names only)
 - Not verified: `docs.iroha.tech` (JS app); `crates/iroha_kagami/src/client_configs.rs` contents; source of `CanReadAllLedgerData` grant in our genesis; behavior of a Committee-only peer for lane liveness; cross-org P2P transport security; whether client-bi holds CanEnactGovernance (inferred from `aps.rs:279-291`, secret values not read)
+- Added 2026-11-11 (section 2a), `hyperledger-iroha/iroha@071e281e`: `crates/iroha_config/src/parameters/{user,actual,defaults}.rs`, `crates/iroha_genesis/src/lib.rs`, `crates/iroha_model_base/src/peer.rs`, `crates/iroha_data_model/src/parameter/system.rs`, `crates/iroha_core/src/{kiso,peers_gossiper}.rs`, `crates/irohad/src/main.rs`, `defaults/{client.toml,nexus/config.toml}`, `specs/{references/peer.template.toml,telemetry.md}`; `radityaaa43/iroha3-rd-dfabi@e2a1794`: `network/generate.sh`, `network/genesis-rd-dfabi.jq`, `deploy/k8s/{base/statefulset.yaml,networkpolicy.yaml}`; `kubernetes.io/docs/concepts/services-networking/network-policies` (fetched 2026-11-11); `design/CLUSTER2-FACTS.md` (node-level only, RTT 15 ms)
+- Not verified (2a): rolling restart after `trusted_peers` change (not documented; inferred from startup config read); address gossip making restarts of other peers unnecessary; LB/NAT source IP vs `ipBlock` on Alibaba; lead's claim that an empty genesis topology avoids a reset (contradicted, see 2a)

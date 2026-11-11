@@ -71,11 +71,11 @@ flowchart LR
 
 ## 2. AFTER (target)
 
-Each institution (BI + 3 banks) runs its own stack in its own cluster or namespace with its own kubeconfig. Shared items are public data or on-ledger objects.
+Each institution (BI + 3 banks) runs its own stack in its own namespace (cluster 1 BI/A/B, cluster 2 C, see 2a) with its own kubeconfig. Shared items are public data or on-ledger objects.
 
 ```mermaid
 flowchart LR
-  subgraph CB["BI cluster, BI kubeconfig"]
+  subgraph CB["BI namespace, BI kubeconfig"]
     BI_A["Arma party 1"]
     BI_C["committer + Postgres TLS"]
     BI_M["CA + Org1MSP + admin key"]
@@ -83,7 +83,7 @@ flowchart LR
     BI_G["gateway: envoy + opa + fxapi"]
     BI_U["BI client"]
   end
-  subgraph CN["Bank cluster N, bank kubeconfig, x3"]
+  subgraph CN["Bank namespace N, bank kubeconfig, x3"]
     B_A["Arma party N"]
     B_C["committer + Postgres TLS"]
     B_M["CA + OrgNMSP + admin key"]
@@ -174,6 +174,93 @@ Recommendation: RETIRE as a stack, KEEP as pattern source. Copy default-deny, PS
 - 64-bit amounts fixed in namespace `rd_dfabi_v2` (README.md:19-24).
 - Not found upstream (stated, not guessed): per-party key generation in `armageddon`; namespace-per-org prescription; committer-per-org prescription; Fabric-X Idemix support statement in committer docs; k-of-n auditor.
 
+## 2a. Deployment topology (user decision 2026-11-11)
+
+Rule: one namespace = one full Fabric-X stack per org (BI, bank A, B, C); only Lensa is shared. Cluster 1 (current) holds ns-bi, ns-bank-a, ns-bank-b; cluster 2 (to be provisioned, not probed) holds ns-bank-c. The multiregion namespaces (2.4) are the pattern reference and are retired. This replaces the "BI cluster / bank cluster" labels of section 2: the unit is the namespace, per-org kubeconfig and RBAC stay.
+
+```mermaid
+flowchart LR
+  LENSA["Lensa (shared): relay, gateway client cert per bank, no key, no kubectl"]
+  subgraph CL1["Cluster 1 (current)"]
+    subgraph NBI["ns-bi: issuer + endorser-1, CA Org1MSP, bundle source"]
+      AR1["Arma party 1: router batcher consenter assembler"]
+      CM1["committer: sidecar coordinator validator verifier query + DB TLS"]
+      FS1["FSC node + keys Secret"]
+      GW1["fx-gw: envoy + opa"]
+    end
+    subgraph NBA["ns-bank-a: CA Org2MSP, bundle source"]
+      ARA["Arma party 2"]
+      CMA["committer + DB TLS"]
+      FSA["FSC node + endorser-2 + keys Secret"]
+      GWA["fx-gw: envoy + opa"]
+    end
+    subgraph NBB["ns-bank-b: CA Org3MSP, bundle source"]
+      ARB["Arma party 3"]
+      CMB["committer + DB TLS"]
+      FSB["FSC node + endorser-3 + keys Secret"]
+      GWB["fx-gw: envoy + opa"]
+    end
+  end
+  subgraph CL2["Cluster 2 (to be provisioned)"]
+    subgraph NBC["ns-bank-c: CA Org4MSP, bundle source"]
+      ARC["Arma party 4"]
+      CMC["committer + DB TLS"]
+      FSC["FSC node + endorser-4 + keys Secret"]
+      GWC["fx-gw: envoy + opa"]
+    end
+  end
+  AR1 <--> ARA
+  AR1 <--> ARB
+  ARA <--> ARB
+  ARC <-->|"cross-cluster: consenter BFT, batcher, router, mTLS"| AR1
+  ARC <-->|"cross-cluster"| ARA
+  ARC <-->|"cross-cluster"| ARB
+  AR1 -->|"own assembler"| CM1
+  ARA -->|"own assembler"| CMA
+  ARB -->|"own assembler"| CMB
+  ARC -->|"own assembler"| CMC
+  FSA -->|"P2P endorsement"| FS1
+  FSB -->|"P2P endorsement"| FS1
+  FSC -.->|"cross-cluster P2P endorsement"| FS1
+  FSC -.->|"cross-cluster P2P"| FSA
+  FSC -.->|"cross-cluster P2P"| FSB
+  LENSA -->|"mTLS, one gateway per bank"| GW1
+  LENSA --> GWA
+  LENSA --> GWB
+  LENSA --> GWC
+```
+
+### 2a.1 Namespace must contain
+
+| Component | Setting | Upstream citation |
+|---|---|---|
+| Arma party endpoints | Router, batcher, consenter, assembler each with public `Host`, `Port`, `TLSCert`; party `TLSCACerts`; BFT delivery endpoints in the consenter mapping; `UseTLSRouter` / `UseTLSAssembler` set to TLS or mTLS; same config block everywhere | orderer:config/party_shared_config.go:11-68; testutil/fabric/sampleconfig/configtx.yaml:73-75,313-321; config/generate/network_config.go:21-23,46-49; docs/architecture.md:148-153,187 |
+| Committer per org | Sidecar `tls.mode: mtls`; orderer connection gets endpoints and TLS roots from `latest-known-config-block-path` (no endpoint list in the sample), `fault-tolerance-level: BFT`; assembler = own party's | committer:cmd/config/samples/sidecar.yaml:9-21,66-76; docs/sidecar.md:57-58 |
+| Committer DB | `tls.mode: tls` + `ca-cert-path`; no mTLS to the database | committer:cmd/config/samples/vc.yaml:62-67 |
+| CA / MSP per org | Own Fabric CA + MSP in the namespace (Ansible k8s inventory deploys "Fabric CA, PostgreSQL, TLS, and mTLS"); Idemix creator route stays UNVERIFIED live | hyperledger.fabricx 0.8.26 examples/inventory/README.md:207; panurus-itest/README.md:118-121 (deviation 2) |
+| FSC node + endorser | Own `fsc.p2p` listen address and a routing table naming the other orgs by public address; today `k8s.py` rewrites P2P to in-cluster names, which breaks across clusters; one endorser per org with `WithOrganization(org)` | panurus-itest/scripts/k8s.py:74-75; panurus:integration/token/fungible/topology/topology.go:164-186; panurus-itest/rdbi/topology.go:51. FSC core.yaml sample: not opened |
+| Key custody | FSC node keys, token wallet, CA and Arma keys only in this namespace's Secrets; no `rdbi-driver-files`-style Secret with all party keys | opa/DESIGN.md:141-143; live Secret names (section 1) |
+| Gateway + NetworkPolicy | rdbi FSC API ingress only from this namespace's fx-gw (`rdbi-*-ingress` netpols exist today; their source selector not re-read); FSC P2P port open to the other orgs' egress; orderer and committer ports open between parties; default-deny as base (multiregion pattern, 2.4). Cross-cluster peers are not pods of this cluster: the doc's selector semantics for remote peers are not opened | live `kubectl get netpol -n fabricx` (2026-11-11); https://kubernetes.io/docs/concepts/services-networking/network-policies/ not opened |
+| Bundle source | Per-org signed-bundle source inside the namespace; gateway pulls it locally, no cross-cluster bundle pull | opa/DESIGN.md:96-103 |
+| Lensa relay | Calls only the bank's gateway endpoint with that bank's client cert; no `kubectl exec`, no psql, no kubeconfig of any org | frontend@aa6e09b:server/src/adapters/fabricx.ts:99 (kept); :74-77,155,174,283-284 (removed) |
+
+### 2a.2 Cross-cluster limits
+
+1. Arma membership: docs say config changes only through a config transaction (orderer:docs/architecture.md:151). Moving party 4 to cluster 2 changes its `Host`/`Port`; such a change needs a node restart and dynamic reconfig is a TODO (orderer:config/reconfig.go:68,96). `AddNewParty` / `RemoveParty` exist only as test helpers (testutil/configutil/config_update_utils.go:952,1087). A documented cross-cluster add or move path, and any capabilities prerequisite for it: not found. Our `cfgupdate` writes neither (2.1). Committer sidecars refetch endpoints from the config block (committer:docs/sidecar.md:482-486). Fallback is re-genesis (DELTA 3).
+2. Lensa reads: each bank's own committer query service gives read-only access to that committer's state DB (committer:docs/query-service.md:29-40); there is no cross-org read, so Lensa uses the bank's gateway ops.
+3. FSC discovery: the repo writes static P2P addresses (k8s.py:74-75); P2P type is WebSocket (rdbi/topology.go:51) with a libp2p bootstrap node in the topology (:89-90). Whether FSC discovers peers dynamically across clusters: not found (FSC docs not opened). Plan with static routing to public endpoints.
+4. Ansible 0.8.26: the k8s inventory runs locally against one kubectl target (examples/inventory/README.md:206; k8s/fabric-x-cryptogen.yaml:20-21) and reaches remote clusters by `K8S_NODE_IP` NodePort (:217). One run therefore covers one cluster; merging crypto and the config block across two runs is not documented.
+5. Anti-affinity: irrelevant for C (own cluster); BI, A, B still share cluster 1 nodes, so DELTA 11 stays for them.
+
+### 2a.3 Capacity on cluster 2
+
+Source: `design/CLUSTER2-FACTS.md` (node-level facts only). Cluster-1 request totals today: fabricx 42 pods, 720m CPU, 1.7 GiB (most containers have no requests); besu 4 pods, 4000m, 9.5 GiB; paladin 10 pods, 1790m, 6.6 GiB; iroha3 6 pods, 1150m, 4.4 GiB. Fabric-X party C is about 13 pods. It fits by requests only if every container gets requests; memory on member nodes is the risk; schedule the Fabric-X party last. User rule (2026-11-11): every namespace existing on cluster 2 today belongs to other work; bank C Fabric-X is built new in a NEW namespace this project creates (naming: lead); the capacity left over is shared with unrelated workloads and not ours to change. The first write to cluster 2 is a CLUSTER-OP that creates new namespaces only. What the new party must have: images pinned at 1.0.4 by digest, DB `tls.mode: tls` (vc.yaml:65), Org4MSP identical to the config block, no `*-v2` auditor token apps (2.3).
+
+
+### 2a.4 Cross-region latency
+
+RTT about 15 ms measured (coordinator), assume at most 30 ms pod to pod. Smallest timers, defaults and sample values (live values not read): batch creation 500 ms, SmartBFT batch max interval 500 ms and batcher submit 500 ms (orderer:config/defaults.go:85,70,51), consenter collect 1 s (sampleconfig/configtx.yaml:636), request forward 10 s (defaults.go:71; sample 5 s, configtx.yaml:630), first strike 10 s (defaults.go:86), cluster RPC 1 min (defaults.go:22), view change 20 s, leader heartbeat 1 min (configtx.yaml:634-635). Margin: 30 ms is 6 percent of the smallest timer (about 16x); one RTT per consensus hop is noise, hop count not derived. Committer: the sidecar pulls from its own assembler inside the namespace, so no cross-region hop; its 1 s suspicion grace per block (committer sidecar.yaml:84), 30 s stream write timeout (:131) and 5 min coordinator startup (coordinator.yaml:47) are untouched. FSC endorsement collect is 2 min (`initiator.go:99`), so 30 ms is noise.
+
 ## 3. DELTA
 
 Cost S = under 1 day, M = 1-3 days, L = more or multi-party coordination.
@@ -181,20 +268,21 @@ Cost S = under 1 day, M = 1-3 days, L = more or multi-party coordination.
 | # | What | Source | Objective | Files / objects | Cost |
 |---|---|---|---|---|---|
 | 1 | Per-bank key custody: delete `rdbi-driver-files` and Deployment `rdbi-driver`; Lensa stops exec/psql/`FABRICX_KUBECONFIG` and holds no bank key or kubeconfig; per-bank client credentials for the gateway; ledger reads through the org's own query service or gateway ops | opa/DESIGN.md:141-143; fabricx.ts:74-77,155,174,283-284,445; platform-fabricx.md finding 2 | (b) | secret/deploy in ns fabricx (delete = user); frontend `server/src/adapters/fabricx.ts`, `gateway.ts`; `fx-gw-N-mtls` client CA split | M |
-| 2 | Per-org namespace or cluster, own kubeconfig and RBAC; template from multiregion patterns (default-deny, PSS restricted, per-org identity Secrets); move CA, orderer, committer, FSC, gateway Secrets to the owning org | 2.1, 2.4; live `get ns,netpol,secret` | (a)(b) | new per-org manifests via `panurus-itest/scripts/k8s.py` (existing, custom); ns fabricx pods | L |
+| 2 | Own namespace per org (cluster 1 BI/A/B, cluster 2 C), own kubeconfig and RBAC; template from multiregion patterns (default-deny, PSS restricted, per-org identity Secrets); move CA, orderer, committer, FSC, gateway Secrets to the owning org | 2.1, 2.4; live `get ns,netpol,secret` | (a)(b) | new per-org manifests via `panurus-itest/scripts/k8s.py` (existing, custom); ns fabricx pods | L |
 | 3 | Own Arma party per org: org-generated keys, public material exchange, mTLS across clusters, same genesis; moving parties means key rotation or channel reset (destructive: user) | orderer:cmd/armageddon/README.md:27-91,237-281; architecture.md:148-153,187 | (a) | `orderer-*-N` STS and secrets; `multiorg/cfgupdate` genesis | L |
 | 4 | Committer per org: pull from own assembler, DB TLS (`tls.mode: tls`), orderer TLS roots from the config block | committer:docs/tls-configurations.md:81-95,129-136; orderer:README.md:66; vc.yaml:1-2 | (a) | `multiorg/committer/config/vc.yaml`, `sidecar.yaml`; `scripts/k8s.py` bank pod | M |
 | 5 | Idemix MSP + `known_certs` through a config update, then remove `ids/anon` and the FSC patch; test on a scratch channel first | README.md:115-121; contracts-tokens report (FSC@86539af4 transaction.go:770-800); committer:docs/namespace-policy.md:320-331 | (b) | `multiorg/cfgupdate/main.go` (extend, or `configtxlator`), `patches/fsc-full-certificate.patch`, ids/anon | L |
 | 6 | Admin keys per org; channel/lifecycle changes by MAJORITY; decide 4-of-4 vs MAJORITY for LifecycleEndorsement | cfgupdate/main.go:123; orderer sample configtx.yaml:227-229 | (a)(c) | channel config, cfgupdate | M |
 | 7 | Keep OutOf(3,4); document rule k = N - F and its derivation; revisit when N changes | 2.1 namespace row; topology.go:84 | (c) | `panurus-itest/rdbi/topology.go`, README | S |
 | 8 | Keep auditor-less; scheduled per-bank `op: report` (empty TxID) + reconcile; Lensa text "dikirim ulang nanti" must match the job | 2.3; iroha3-driver-fabricx-bi-down.md finding 1 | (c) R2 | gateway op or CronJob; fabricx.ts:250 | S |
-| 9 | Gateway and bundle per org: gateway in the org cluster, per-org bundle signing key, bundle source reachable by all, netpol default-deny incl. orderer/committer pods | opa/DESIGN.md:96-109,111-126; network report finding 1 | (b) | `fx-gw-N`, `opa/networkpolicy.yaml`, bundle-server (ns paladin) | M |
+| 9 | Gateway and bundle per org: gateway in the org namespace (cluster 1 BI/A/B, cluster 2 C), per-org bundle signing key, bundle source reachable by all, netpol default-deny incl. orderer/committer pods | opa/DESIGN.md:96-109,111-126; network report finding 1 | (b) | `fx-gw-N`, `opa/networkpolicy.yaml`, bundle-server (ns paladin) | M |
 | 10 | FSC P2P routing across clusters (static table), per-org endorser reachability | k8s.py:74-75; panurus topology.go:164-186 | (a)(b) | rdbi node configs, Services/NodePorts | M |
-| 11 | Anti-affinity per party and per bank until clusters are split | platform-fabricx.md finding 1; live pods -o wide | (a) | STS orderer-*, rdbi-bankN | S |
+| 11 | Anti-affinity per party and per bank for BI/A/B inside cluster 1 (C is on its own cluster) | platform-fabricx.md finding 1; live pods -o wide | (a) | STS orderer-*, rdbi-bankN | S |
 | 12 | Multiregion: retire stack, keep pattern (user approves delete) | 2.4 | (a) | ns fabricx-bi, fabricx-bank-a/b/c | S |
 | 13 | Upstream PRs for accepted patches, no new code: endorser failover (`endorsement/fsc/service.go`), sequential signatures (`ttx/collectendorsements.go`), issuer audit tokens (`core/common/authorization.go`); FSC `known_certs`/Idemix removes the full-certificate patch (item 5); auditor-limits dropped for production | platform-fabricx.md ACCEPTED PATCHES | (a)(c) | `panurus-itest/patches/*` | S each |
+| 14 | Cluster 2 provisioning for bank C: Arma party, committer, FSC P2P and gateway endpoints across clusters | 2a.1-2a.4; orderer:config/reconfig.go:68,96; k8s.py:74-75 | (a)(b) | ns-bank-c on cluster 2: party 4 move (config tx or re-genesis, user), committer, FSC node with public P2P routing, fx-gw, bundle source, requests on every container | L |
 
-Order: 7, 8, 11 (no risk) then 1 (unblocks the objective), 5 on a scratch channel, then 2 to 4, 6, 9, 10, 3 last (reset or rotation needs every org and the user).
+Order: 7, 8, 11 (no risk) then 1 (unblocks the objective), 5 on a scratch channel, then 2 to 4, 6, 9, 10, 14 (with 3: both need every org), 3 last (reset or rotation needs every org and the user).
 
 ## 4. SOURCES
 
@@ -206,5 +294,6 @@ Date of reading: 2026-11-11.
 - LFDT-Panurus/panurus@5f3c49e2 (v0.24.0, local checkout with 4 project patches): token/core/common/validator_auditing.go, token/core/zkatdlog/nogh/v1/setup/setup.go, token/services/ttx/collectendorsements.go (patched), integration/token/fungible/topology/topology.go, docs/{public_parameters,token_sdk_usage}.md, docs/drivers/dlogwogh.md
 - hyperledger.fabricx 0.8.26 (315a91ce per NOTES.md): examples/playbooks/20-generate-crypto.yaml, roles/configtxgen/templates/configtx.yaml.j2, roles/configtxlator/meta/argument_specs.yaml, roles/committer/tasks/crypto/fetch.yaml
 - Not opened: fabric-smart-client v0.24.0 (86539af4, module cache absent; its transaction.go:770-800 and fabric-x-common@v0.2.8 msp/mspmgrimpl.go cited only through the contracts-tokens report), fabric-x-common, committer docs/query-service.md, Fabric Smart Client routing docs
+- Added 2026-11-11 for 2a: committer@08a469d cmd/config/samples/{sidecar,vc,coordinator}.yaml, docs/{sidecar,query-service}.md; orderer@dd296e3 config/{party_shared_config,reconfig,defaults}.go, config/generate/network_config.go, testutil/configutil/config_update_utils.go, testutil/fabric/sampleconfig/configtx.yaml (lines 73-75, 313-321, 630-636); hyperledger.fabricx 0.8.26 examples/inventory/README.md, examples/inventory/k8s/fabric-x-cryptogen.yaml; panurus-itest/rdbi/topology.go:51,89-90; scratchpad design/CLUSTER2-FACTS.md and coordinator message (cluster 2 data and RTT, not probed); https://kubernetes.io/docs/concepts/services-networking/network-policies/ not opened; FSC docs not opened
 - agents/analyst/reports/2026-11-11-{platform-fabricx,matrix,iroha3-driver-fabricx-bi-down,opa,network,contracts-tokens}.md
 - Live read-only (KUBECONFIG alibaba.yaml, 2026-11-11 07:19-07:22Z): `kubectl get ns --show-labels`; `get deploy,sts,svc,pods -o wide,netpol,secret (names only) -n fabricx`; same in fabricx-bi, fabricx-bank-a/b/c; `get deploy bundle-server -n paladin`

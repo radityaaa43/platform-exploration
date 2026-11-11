@@ -130,7 +130,7 @@ flowchart LR
 ### Hard limits (cannot be removed with the allowed building blocks)
 
 1. Amount, token and sender address stay public: EIP-5564 covers recipient privacy only (Motivation; metadata bytes 26-57 carry the amount). Accepted by the user 2026-11-10.
-2. BI "see all" is project design, not upstream. The viewing key (EIP-5564 "Definitions") lets its holder recognise payments to a recipient, nothing more. Nothing on chain forces a bank to hand it over or keep it current. A bank can call `registerKeys` again (EIP-6538) with a new viewing key and future receives become invisible to BI. The BI check in section 2 is detective only. R1 stays ACCEPTED with this GAP: "BI sees all" holds only for banks whose current viewing key BI holds. BI's scanner is a new concentration of linkage power; keep it in BI's own cluster and Vault.
+2. BI "see all" is project design, not upstream. The viewing key (EIP-5564 "Definitions") lets its holder recognise payments to a recipient, nothing more. Nothing on chain forces a bank to hand it over or keep it current. A bank can call `registerKeys` again (EIP-6538) with a new viewing key and future receives become invisible to BI. The BI check in section 2 is detective only. R1 stays ACCEPTED with this GAP: "BI sees all" holds only for banks whose current viewing key BI holds. BI's scanner is a new concentration of linkage power; keep it in BI's own namespace (cluster 1) and Vault.
 3. R1 says only BI, sender and receiver see a transaction. Brief assumption 1 gives the custodian the banks' viewing keys too (`architecture-brief.md:59`). If custodian is not BI this is a fourth viewer. Options for the user: custodian = BI (no extra viewer, R2 GAP stays on BI), or custodian without viewing keys (it then sees only public data plus the cert request; checking the receiver's KYC then needs the sender to disclose the ephemeral key, which is new protocol, not in project code).
 4. DFABI transfers always need an online certificate signer (invariant `architecture-brief.md:461`). Online at: bond transfer, bond funding of an escrow, `DvPFactory.create`. Not online at: RD transfer, `settle()`, `cancel()` (certs are stored in the escrow at creation, `DvPEscrow.sol:91-100`). The bond refund in `cancel()` still fails if the stored refund cert has expired (`:131-136`). Moving the signer off BI moves the mandatory third party, it does not remove it. The two existing validator settings that would remove it also remove control: several signers (each bank a signer: any signer can certify any transfer) or `registerTokenSetup` with `CertificateValidation.None` (then the allowlist, which holds only the custodian, blocks every stealth recipient, `ERC1400TokensValidator.sol:394-432`; allowlist off gives an open token). User decision, not a design default.
 5. `RupiahDigital.issuer` and `DvPFactory.custodian` are immutable. RD issuer cannot change without a new RD token. The factory can be replaced by a new instance with a new `custodian_`; escrows already created are unaffected.
@@ -138,21 +138,79 @@ flowchart LR
 7. Besu accounts allowlisting lists fixed addresses (`accounts-allowlist` in `permissions_config.toml`); stealth senders are fresh addresses per payment, so it would block them. Inference from the allowlist semantics; not tested. Live network has gas price 0 (`tx-pool-min-gas-price=0`), so stealth addresses need no gas funding (EIP-5564 "Recipients' transaction costs" does not apply).
 8. Vendored UniversalToken is archived and unaudited (`src/vendor/universal-token/README.md`); memo key schedule is home-made (`ts/memo.ts:8-9,41-51`, contracts-tokens.md). Out of scope here, unchanged.
 
+## 2a. Deployment topology (user decision 2026-11-11)
+
+Rule: one namespace = one full Stealth stack per org (BI, A, B, C); only Lensa is shared. Cluster 1 (current) holds ns-bi, ns-bank-a, ns-bank-b. Cluster 2 (to be provisioned, not probed) holds ns-bank-c. Where section 2 says "cluster" for a bank, read "namespace". Custodian sits in ns-bi if custodian = BI, else in its own namespace (open question, limit 3).
+
+```mermaid
+flowchart LR
+  LS["Lensa host: relay + UI, only shared component, NO keys"]
+  subgraph C1["Cluster 1 (current)"]
+    subgraph NBI["ns-bi"]
+      GWBI["gateway envoy+opa"] ~~~ SGBI["BI signer + scanner: issuer key, bank view-key copies"] ~~~ NBIN["Besu validator + RPC node (JWT) + state"]
+    end
+    subgraph NA["ns-bank-a"]
+      GWA["gateway envoy+opa"] ~~~ SGA["signer + scanner: own spend+view keys"] ~~~ NAN["Besu validator + RPC node (JWT) + state"]
+    end
+    subgraph NB["ns-bank-b"]
+      GWB["gateway envoy+opa"] ~~~ SGB["signer + scanner: own spend+view keys"] ~~~ NBN["Besu validator + RPC node (JWT) + state"]
+    end
+  end
+  subgraph C2["Cluster 2 (to be provisioned)"]
+    subgraph NC["ns-bank-c"]
+      GWC["gateway envoy+opa"] ~~~ SGC["signer + scanner: own spend+view keys"] ~~~ NCN["Besu validator + RPC node (JWT) + state"]
+    end
+  end
+  LS -- "unsigned intent" --> GWBI --> SGBI <-- "signed tx out, announcements in (own RPC)" --> NBIN
+  LS -- "unsigned intent" --> GWA --> SGA <-- "signed tx out, announcements in (own RPC)" --> NAN
+  LS -- "unsigned intent" --> GWB --> SGB <-- "signed tx out, announcements in (own RPC)" --> NBN
+  LS -- "unsigned intent" --> GWC --> SGC <-- "signed tx out, announcements in (own RPC)" --> NCN
+  SGBI -. "key stays inside ns" .-> SGBI
+  SGA -. "key stays inside ns" .-> SGA
+  SGB -. "key stays inside ns" .-> SGB
+  SGC -. "key stays inside ns" .-> SGC
+  NBIN <-- "QBFT p2p" --> NAN <-- "QBFT p2p" --> NBN <-- "QBFT p2p, cross-cluster" --> NCN <-- "QBFT p2p, cross-cluster" --> NBIN
+```
+
+Namespace must contain (per org; Besu pages are docs.besu-eth.org, unversioned snapshot, image 26.8.1):
+
+| Component | Setting | Upstream citation |
+|---|---|---|
+| Besu validator, p2p across clusters | Same `static-nodes.json` (enode URLs) on every node with `--discovery-enabled=false`, or `--bootnodes`; `--p2p-host` = address the other cluster can reach (advertised host, default 127.0.0.1), `--p2p-port` (default 30303) exposed; `--nat-method` default AUTO, NONE disables NAT. Add C with `qbft_proposeValidatorVote(addr, true)`, run on validators (vote from a non-validator has no effect) | public-networks/how-to/connect/{static-nodes,manage-peers ("Disable discovery"),specify-nat}; private-networks/how-to/configure/bootnodes; public-networks/reference/options (`p2p-host`, `p2p-port`, `nat-method`); private-networks/how-to/configure/consensus/qbft "Add and remove validators"; private-networks/tutorials/kubernetes/quorum-explorer "Validators" |
+| RPC node (non-validator) | `rpc-http-authentication-enabled=true` with an external JWT (`rpc-http-authentication-jwt-public-key-file`); `rpc-http-api` ETH,NET,WEB3 only; `host-allowlist` = the gateway and scanner host names (an allowlist is not authentication) | public-networks/reference/options (`rpc-http-authentication-enabled`, `rpc-http-authentication-jwt-public-key-file`, `host-allowlist`); public-networks/how-to/use-besu-api/authenticate "JSON-RPC permissions" |
+| Signer/scanner service | Holds this org's spending + viewing (+ identity) keys only. Stealth private key = spending key + hash of shared secret, so the spending key must be usable inside the service. Scanner = viewing-key holder: reads `Announcement` logs from own RPC node, view tag first. Signs, then `eth_sendRawTransaction` to own RPC | EIP-5564 "Definitions", "Private key derivation", "Parsing considerations"; Besu use-besu-api "Account management" |
+| Certificate signer | In ns-bi if custodian = BI (section 2 option), else in the custodian namespace; key in that namespace's Vault. Same party calls `DvPFactory.create`. Bank signers send it cert requests through its gateway | `stealth-address/src/DvPFactory.sol:14,30-31` (custodian immutable, only custodian creates); `architecture-brief.md:461` (certificate signer online invariant) |
+| Gateway + NetworkPolicy | envoy+opa is the only ingress from Lensa. NetworkPolicy on the RPC pod: ingress only from this namespace's gateway and signer/scanner pods (`podSelector`). Validator p2p port: ingress from the other validators, `namespaceSelector` inside cluster 1, IP block for cluster 2 (inference: selectors name pods and namespaces of one cluster) | kubernetes.io/docs/concepts/services-networking/network-policies "Behavior of `to` and `from` selectors"; page intro (cluster needs a network plugin that enforces NetworkPolicy) |
+| Lensa relay | No key. Sends the unsigned intent to the bank gateway, gets the tx hash back from the bank signer | EIP-5564 "Definitions" (keys belong to the recipient); section 2 row "Lensa" |
+
+### Cross-cluster limits
+
+1. Besu discovery and NAT: the enode advertises the external IP and port; IP changes and NAT method changes are not supported while running. Cluster 2 needs a stable address reachable from cluster 1 for p2p (and the reverse). Docs name no Kubernetes cross-cluster recipe: not found. Basis: public-networks/how-to/connect/specify-nat; the options page lists UPNP, UPNPP2PONLY, DOCKER, AUTO, NONE.
+2. Validator vote needs more than 50% of the current set. Moving validator-4 (C, inferred) to cluster 2 with a new node key means vote add (true) for the new address, then vote remove (false) for the old one; each vote needs 3 of the 4 current validators, so BI, A and B must all coordinate. Source: qbft "Add and remove validators". n=4 tolerates 1 down (existing row, poa "Liveness"), so a cluster 2 outage alone does not stop blocks.
+3. Announcer singleton: one `ERC5564Announcer` per chain, so C reads the same contract through its own RPC node. Fine. Source: EIP-5564 Specification ("MUST be a singleton contract, with one instance per chain").
+4. BI "see all" needs bank-initiated viewing-key handover, also from C across clusters. EIP-5564 has no mechanism: not found; project design (hard limit 2).
+5. Lensa must reach four gateways in two clusters. No upstream constraint: not found.
+
+Capacity on cluster 2: bank C goes only into NEW namespaces this project creates (naming: lead). The capacity left over is shared with unrelated workloads and is not ours to change. The first write to cluster 2 is a CLUSTER-OP that creates new namespaces only. The Stealth share for bank C is the RPC node, the signer + scanner and the gateway, about 4 pods, about 0.6 vCPU / 1.3 GiB requests (CLUSTER2-FACTS). Node level: about 9 vCPU / 29 GiB unrequested of about 23.4 vCPU / 53 GiB allocatable, so it fits on paper. It shares the Besu validator with the Paladin platforms (one validator pod per bank, not one per platform). Memory is the binding limit (member nodes 76% to 98% used): place Besu pods on member nodes.
+
+Cross-region latency: RTT Jakarta to Singapore about 15 ms (measured, API-server path); assumed at most 30 ms. QBFT `blockperiodseconds` is 2 and `requesttimeoutseconds` is 4 in the live `besu-genesis` ConfigMap (ns `besu`, read-only, 2026-11-11; `epochlength` 30000); the QBFT page shows the same keys (docs.besu-eth.org private-networks/how-to/configure/consensus/qbft; its example uses 5 and 10, it gives no semantics for `requesttimeoutseconds`, so reading it as the per-round timeout is inferred). Margin: 30 ms is 1.5% of the block period and 0.75% of the request timeout, so no change. A validator in cluster 2 counts toward the liveness rule: QBFT needs at least two-thirds of validators operating to create blocks, and the minimum is four validators (docs.besu-eth.org private-networks/concepts/poa "Liveness", "Minimum number of validators"). With 4 validators, one down is tolerated, so a cluster 2 outage or a WAN cut alone does not stop blocks, but a second validator down does.
+
 ## 3. DELTA
 
 | # | What | Source | Objective | Files / objects | Cost |
 |---|---|---|---|---|---|
 | 1 | Per-bank key custody; Lensa becomes a relay without keys. Move spend, view, identity keys and pool privateKeys of A, B, C into bank-owned signer/Vault; BI deployer and issuer keys into BI Vault; Lensa sends unsigned intents, bank client signs and submits; remove key fields from state | `stealth.ts:27,113-118,348-349,362-390`; `state/stealth.json` key names; EIP-5564 "Definitions"; Besu "Account management" | (b), R1 Lensa GAP | `frontend/server/state/stealth.json`, `server/src/adapters/stealth.ts` (split into intent builder and bank-side signer), new bank signer service per bank, `lensa.env` | L |
 | 2 | Bank-run scanner with own viewing key; Lensa read model fed by bank scanners, not by holding view keys | EIP-5564 "Parsing"; `stealth.ts:167,200,237,448`; `ts/stealth.ts:58-80` | (b), R1 | bank client scan job per bank, Lensa read API | M |
-| 3 | BI scanner in BI cluster: bank-initiated viewing-key handover (view only, no spend key), registry compare job (viewing pubkey in `stealthMetaAddressOf` vs held copy) | `architecture-brief.md:59,119,207`; EIP-6538 Specification; hard limit 2 | R1 "BI see all" (detective) | BI Vault entry per bank, scan + compare job, alert on `StealthMetaAddressSet` change | M |
+| 3 | BI scanner in ns-bi (cluster 1): bank-initiated viewing-key handover (view only, no spend key), registry compare job (viewing pubkey in `stealthMetaAddressOf` vs held copy) | `architecture-brief.md:59,119,207`; EIP-6538 Specification; hard limit 2 | R1 "BI see all" (detective) | BI Vault entry per bank, scan + compare job, alert on `StealthMetaAddressSet` change | M |
 | 4 | Custodian split from BI (user picks the party; may stay BI). New certificate-signer key in its own Vault; `addCertificateSigner(new)`, `transferOwnership`, `setControllers`, minter; deploy new `DvPFactory(custodian_)`; retire old signer with `removeCertificateSigner` | `DvPFactory.sol:14-18,30-31`; `ERC1400.sol:31,155,745`; `ERC1400TokensValidator.sol:156-163`; `architecture-brief.md:12,50` | (c), R2 GAP moves, R1 viewer count (limit 3) | DfabiBond, validator, new DvPFactory address in `state/stealth.json` `deployed.dvpFactory`, custodian cert service | M |
-| 5 | Own validator per bank: bank generates node key, runs Besu in its cluster, validator set rotated by majority vote; label validator ownership | Besu QBFT "Add and remove validators", "Liveness"; node-keys; live 4 sts 2026-11-11 | (a) | `besu-node-validator-N` sts and secret `besu-node-validator-N-keys` move to bank clusters; genesis `extraData` stays (vote on live chain) | L |
+| 5 | Own validator per bank: bank generates node key, runs Besu in its own namespace (cluster 1 BI/A/B, cluster 2 C), validator set rotated by majority vote; label validator ownership | Besu QBFT "Add and remove validators", "Liveness"; node-keys; live 4 sts 2026-11-11 | (a) | `besu-node-validator-N` sts and secret `besu-node-validator-N-keys` move to the org namespaces (cluster 1 BI/A/B, cluster 2 C); genesis `extraData` stays (vote on live chain) | L |
 | 6 | Per-bank RPC node: non-validator, JWT auth with `eth/net/web3` permissions only, `host-allowlist` set, CORS off, metrics bound to internal; validators p2p only | Besu "authenticate", "options", quickstart topology; live cm | (b), network review finding 1 | new bank RPC sts, `besu-node-validator-N-besu-config` changes, `bank-gw-N` upstream | M |
 | 7 | One admin domain per org: per-bank kubeconfig, per-bank credentials, no shared `alibaba.yaml` | platform-zeto.md rows "Key custody", "Ingress", "kubeconfig" | (a), (b) | alibaba.yaml copies, `paladin-basic-auth`, `~/.opa-keys`, `~/.opa-mtls` | M |
 | 8 | Retire `deployerKey` as a shared key after items 1 and 4: it keeps only the RD issuer role (immutable, limit 5), so move it into BI Vault as the BI issuer key and strip every other role from it | `RupiahDigital.sol:21,24`; `stealth.ts:27` | (b) | `state/stealth.json` `deployerKey`, BI Vault | S |
 | 9 | Optional: node allowlist (`permissions_config.toml`) for known enodes; no accounts allowlist | Besu "use-local-permissioning"; hard limit 7 | (a) hardening | validator/RPC node config | S |
+| 10 | Cluster 2 provisioning for bank C and cross-cluster validator p2p + gateway endpoints: new cluster, `ns-bank-c` full stack, stable p2p address and `static-nodes.json` on all validators, validator vote (section 2a limit 2), Lensa reaches `gw-C` | section 2a table and limits 1, 2, 5; Besu static-nodes, specify-nat, qbft "Add and remove validators" | (a), (b) | cluster 2 (not probed), `ns-bank-c`, static-nodes on all validators, Lensa gateway endpoint list | L |
 
-Order: 1 and 2 first (no chain change, Lensa and bank-client work), 4 after the user picks the custodian, 5 and 6 together, 7 alongside 5, 3 after 2, 8 last.
+Order: 1 and 2 first (no chain change, Lensa and bank-client work), 4 after the user picks the custodian, 5 and 6 together, 7 alongside 5, 3 after 2, 8 last; 10 before 5 can move validator-4 to cluster 2.
 
 Open for user: custodian party (limit 3 and 4), several-signers or `None` option (limit 4), whether RD may be redeployed to move the issuer (limit 5).
 
@@ -171,6 +229,9 @@ Open for user: custodian party (limit 3 and 4), several-signers or `None` option
   - private-networks/how-to/use-local-permissioning
   - public-networks/how-to/use-besu-api (Account management), .../use-besu-api/authenticate, .../send-transactions
   - public-networks/concepts/node-keys; public-networks/reference/options
+  - added 2026-11-11 for section 2a: public-networks/how-to/connect/{static-nodes,manage-peers,specify-nat}; private-networks/how-to/configure/bootnodes; private-networks/tutorials/kubernetes/quorum-explorer "Validators"; options entries `p2p-host`, `p2p-port`, `nat-method`, `rpc-http-authentication-jwt-public-key-file`, `host-allowlist`
+- https://kubernetes.io/docs/concepts/services-networking/network-policies/ ("Behavior of `to` and `from` selectors", intro) fetched 2026-11-11
+- EIP-5564 (same URL as above, re-fetched 2026-11-11) for section 2a: Specification ("MUST be a singleton contract, with one instance per chain"), "Definitions", "Private key derivation", "Parsing considerations"
 - Live read-only (KUBECONFIG alibaba.yaml, 2026-11-11): ns besu sts/svc/pvc, cm `besu-node-validator-1-besu-config`, cm `besu-genesis`; ns paladin deploy bank-gw-1..4; `~/.config/lensa/lensa.env` (`LENSA_BESU_RPC`, `LENSA_BESU_RPC_BANKS` values are loopback ports only)
 - Analyst reports 2026-11-11 in `agents/analyst/reports/`: platform-stealth.md, platform-zeto.md, matrix.md, contracts-tokens.md, network.md
 
