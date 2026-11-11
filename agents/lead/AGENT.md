@@ -139,3 +139,18 @@ Give review feedback as `path:line — problem — fix`. No praise padding.
 - You do not survey each project's code. Information comes to you from the engineers.
 - You do not mark work done that you have not seen verified.
 - You do not communicate with the user directly unless `orchetrator` asks you to.
+
+## 9. Efficiency duties (added 2026-11-10; see `TEAM.md` §4, §8, §10)
+
+1. **Verify before escalating.** Before you ask the user (through `orchestrator`) to decide,
+   run the command that proves each claim the request rests on and quote the output line.
+   Unproven claims are written "[unverified]". Every request carries a recommended default.
+2. **Batch decisions.** Non-blocking decisions go in one message; a blocking one goes alone.
+3. **Keep every role busy.** At each planning step check who is idle (`ListAgents`) and
+   assign cross-review, tests, or docs from `TEAM.md` §8. Zeto, Noto, and Stealth have one
+   developer, so a second agent reads each diff before it merges.
+4. **Standing approvals.** Use them (`TEAM.md` §4) instead of asking again. Report each use.
+5. **State.** Keep `agents/lead/STATE.md` current: open decisions with their default, tasks
+   per role, what waits on whom. After a restart read it first.
+6. **Automated checks.** Own the §10 plan: assign the post-reboot check and minimal CI, and
+   ask the user for approval before anything is built.

@@ -82,6 +82,13 @@ folder's own repo (`git -C <folder> ...`). Never commit project files to
 `platform-exploration`. A change that spans two folders (for example a chain interface plus
 its adapter) is two PRs, one per repo, merged in the order `lead` sets.
 
+**Nested-repo hazard.** The parent checkout never checks out an old commit, an old branch,
+or a stale local `master`: old parent commits still track the project folders, and git
+would delete or overwrite their files (this removed 256 files on 2026-11-10). In the parent
+repo only branch from an up-to-date `origin/master`, and use `git worktree` for anything
+else. All changes under `agents/` go through a PR, never straight to `master`.
+
+
 `frontend/server/src/adapters/*.ts` is the contract between `fe` and the chain developers. The chain
 side owns what the chain does; fe owns how the adapter calls it. Any change to chain
 interfaces (contract ABI, driver JSON, Torii calls, domain config, ids) must be announced
@@ -110,6 +117,25 @@ to `lead` before merge so the adapter moves in the same change set.
 - **QA gate.** Developer → `qa` handoff after implementing; `qa` reports PASS / FAIL /
   PARTIAL to `lead` and files defects to `lead`. `lead` marks a task done only after a
   `qa` PASS, or a "not run" with a reason `lead` accepts.
+- **Added standing approvals (user, 2026-11-10; adds to §9).** These host-local actions need no new approval,
+  but must be reported to `lead` in the next status line: start or stop (so also restart) a
+  `lensa-pf@*` port-forward unit that is listed in `lensa.service` `Wants=`; any read-only
+  check (`kubectl get/describe/logs`, `ss`, `systemctl status`, `git diff`). Everything
+  else keeps its gate: any cluster write, deploy, image or ConfigMap change, key handling,
+  deletion, `git push` to a shared branch, and anything irreversible. Never `systemctl
+  enable` a `lensa-pf@*` unit: the template has no `[Install]`, so it does nothing.
+  This is the only exception to "any restart" in the §9 always-ask list: restarting
+  `lensa.service`, pods, or any other service still needs approval.
+- **Verify before escalating.** Before `lead` asks the user for a decision, `lead` runs the
+  command that proves each claim the request rests on and quotes the output line. A claim
+  not yet proven is written "[unverified]". Each request carries a recommended default.
+  Non-blocking decisions are batched into one message; blocking ones go alone.
+- **State handoff.** At the end of every task, when blocked, and when going idle, each agent
+  rewrites `agents/<role>/STATE.md` (max 30 lines): current task, facts verified with the
+  command that proved them, open items, next step. The files are local and git-ignored.
+  After a session restart: read `TEAM.md`, your `AGENT.md`, your `STATE.md`, run
+  `ListAgents`, then announce your new ref to `lead`. Addresses are role names; a ref is
+  valid only until the next restart.
 - **Blocked > 15 minutes** on the same problem: report it with the hypothesis you tested.
   Do not spin.
 - **No fabricated results.** If something was not run, say "not run". If a test fails,
@@ -198,6 +224,12 @@ Role files add role-specific skills on top of this list (section "Skills" in eac
   rollout order is kept. Read-only cluster checks may run in parallel.
 - **Do not wait idle.** An engineer waiting on a gate (approval, rollout, review) starts the next independent task and says
   so in the status report.
+- **Use idle capacity.** An agent with nothing assigned for 10 minutes tells `lead` "idle"
+  and then, without waiting, does one of: (a) a read-only `REVIEW` of another developer's
+  open diff, findings to `lead` as `path:line`; (b) tests or docs inside its own area;
+  (c) `qa` support: pre-write RED tests for the next task. Never edit another agent's area.
+  `lead` keeps the idle roles busy first, and the single-developer areas (Zeto, Noto,
+  Stealth) get a second reader before anything merges.
 - **Merge discipline.** Parallel branches are rebased and merged by `lead`'s instruction; each commit is still checked in
   isolation (tsc + tests) before it is made.
 
@@ -234,3 +266,20 @@ Goal: less waiting, less repetition, fewer round trips. Every rule below is meas
   boundaries.
 - Messages to other agents are plain and short: the ask first, then only what the receiver needs. No recaps of what the
   receiver already knows.
+
+## 10. Automated checks and reboot safety (PLANNED, needs user approval to build)
+
+Today a human finds these problems; the aim is that a script finds them first.
+1. **Post-reboot check.** One script run after every boot or restart: all 17 `lensa-pf@*`
+   forwards listening, `lensa.service` active, Lensa `/api/health` shows all 5 platforms
+   ready, no pod `NotReady` in the chain namespaces. Output: one PASS/FAIL line per item.
+   Owner: `fabric` writes it, `lead` reviews, `qa` runs it after the next reboot.
+2. **Minimal CI per project repo.** GitHub Actions on pull requests: typecheck and unit tests
+   (`rd-lensa-frontend`: `npm test` and `tsc --noEmit`; `rd-besu`: `forge test`, `opa test`;
+   `rd-fabric-x`: `go vet` and `go test`; `iroha3-rd-dfabi`: `check-manifests.sh`). No live
+   chain access and no secrets in CI. Owner: `lead` assigns, each developer does their repo.
+3. **Fresh evidence rule.** A `qa` verdict about a runtime path (RPC, forward, gateway) uses
+   a transaction made after the last restart or reboot. Evidence older than the last restart
+   is reported as "stale", not PASS.
+
+Until items 1 and 2 exist, authors quote typecheck and test output in every PR.
