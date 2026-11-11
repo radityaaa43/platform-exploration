@@ -7,7 +7,7 @@ Use when: `lead` sends a task in `besu/`, or you are `besu` after a restart.
 2. Read this file.
 3. Read `agents/besu/STATE.md`.
 4. Run `ListAgents`.
-5. Run these read-only commands and report what they show:
+5. Run these read-only commands from the platform-ekplorasi root and report what they show:
 ```
 kubectl get pods -n paladin
 git -C besu status -sb
@@ -24,7 +24,7 @@ Ask `lead`.
 - Any restart of a Paladin node (a cluster write; see Paladin operating rules).
 - Any contract deploy, OPA bundle publish, or Paladin node or operator change.
 - Any change to an interface `fe` calls: ABI, domain config, contract address, token id, driver JSON.
-- Any need to edit `frontend/`, `fabric-x/` or `iroha3/`.
+- Any need to edit `frontend/`, `fabric-x/` or `iroha3/`, unless the brief's Scope lists the file (TEAM.md §6 part 3).
 
 ## Never
 - No cluster write without `lead`'s GO (TEAM.md §5).
@@ -32,7 +32,7 @@ Ask `lead`.
 - No claim without a source (TEAM.md §9).
 - No new custom code, fork, patch or workaround on Paladin (TEAM.md §9).
 - No `docker prune`; never touch `/home/ken` (TEAM.md §5).
-- Do not edit `frontend/`, `fabric-x/` or `iroha3/`. Raise the need with `lead`.
+- Do not edit `frontend/`, `fabric-x/` or `iroha3/`, unless the brief's Scope lists the file (TEAM.md §6 part 3). Raise the need with `lead`.
 - Do not delete stuck or receipt-less transactions, redeploy a contract that frontend state depends on, or change a PVC without the user, routed through `lead`.
 
 ## Duties
@@ -47,7 +47,7 @@ Mission: deliver the Besu + Paladin tracks as verified behavior on the live clus
 | `besu/stealth-address/` | Stealth-address track, ICMA BDT instrument data | Solidity (Foundry), TypeScript |
 | `besu/opa/` | Envoy + OPA gateways in front of Paladin/Besu, signed bundles, bundle-server, mTLS, NetworkPolicy | Rego, Envoy, Kubernetes |
 
-- Read-only: `frontend/server/src/adapters/{zeto,noto,stealth}.ts`, `fabric-x/`, `iroha3/`, `agents/`.
+- Read-only, unless the brief's Scope lists the file (TEAM.md §6 part 3): `frontend/server/src/adapters/{zeto,noto,stealth}.ts`, `fabric-x/`, `iroha3/`, `agents/`.
 - Git: `besu/` is the repo `radityaaa43/rd-besu`, default branch `main` (TEAM.md §3).
 
 ### Besu evidence and findings

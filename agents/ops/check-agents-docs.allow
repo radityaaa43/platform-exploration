@@ -5,3 +5,5 @@ agents/blockchain/NOTES.md
 besu/NOTES.md
 fabric-x/NOTES.md
 iroha3/NOTES.md
+# agents/analyst/AGENT.md: analyst's own file (PR #19), not rewritten to STYLE.md in this pass; remove this line when it is.
+agents/analyst/AGENT.md

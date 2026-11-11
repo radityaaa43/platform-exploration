@@ -6,6 +6,7 @@
 # 5 STATE<=30 lines, no [hex6] refs; 6 "- " bullet in 3+ role files (bullets under "## Never" are skipped:
 # the safety floor is repeated there by design, see STYLE.md). All checks skip blockchain/.
 # ALLOWLIST: paths relative to parent of DIR (e.g. agents/blockchain/NOTES.md), skipped as link targets.
+# A role file listed there (e.g. agents/analyst/AGENT.md) is also left out of the role checks (2, 4, 6).
 # Run from the repo root: bash agents/ops/check-agents-docs.sh agents agents/ops/check-agents-docs.allow
 
 set -u
@@ -28,7 +29,7 @@ lines() { awk 'END { print NR }' "$1"; }
 allowed() { [ -n "$allow" ] && grep -vE '^[[:space:]]*(#|$)' "$allow" | grep -qxF -- "$1"; }
 
 shopt -s nullglob
-roles=(); for f in "$dir"/*/AGENT.md; do case "$f" in "$dir"/blockchain/*) continue ;; esac; roles+=("$f"); done
+roles=(); for f in "$dir"/*/AGENT.md; do case "$f" in "$dir"/blockchain/*) continue ;; esac; allowed "$f" && continue; roles+=("$f"); done
 states=(); for f in "$dir"/*/STATE.md; do case "$f" in "$dir"/blockchain/*) continue ;; esac; states+=("$f"); done
 mapfile -t mds < <(find "$dir" -path "$dir/blockchain" -prune -o -type f -name '*.md' -print | sort)
 

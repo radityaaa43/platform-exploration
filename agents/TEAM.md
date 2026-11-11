@@ -87,7 +87,7 @@ Chain of command: developers and `qa` report to `lead`; `lead` to `orchestrator`
 - Anything a lower level can decide goes back down: "that is `lead`'s decision".
 
 User-only list. These need the user's approval, routed developer -> `lead` -> `orchestrator` -> user:
-- Destructive or irreversible actions: a delete of data, PVCs, chain data, stuck transactions or a shared branch; wipe, genesis or channel reset; force push to a shared branch; redeploy of live tokens; key custody. Not on this list: your own scratch files, and your own clean worktree after its branch merged (§8).
+- Destructive or irreversible actions: a delete of data, PVCs, chain data, stuck transactions or a shared branch (`master`/`main` or a branch another agent uses); resize, shrink or replace a PVC; wipe, genesis or channel reset; force push to a shared branch; redeploy of contracts that the frontend state depends on (tokens, factories, registries, escrow factory); key custody. Not on this list: your own scratch files, and your own clean worktree after its branch merged (§8).
 - A new cluster write outside a user-approved plan.
 - Changes to R1-R3 or to the exemptions, and scope or track changes.
 - External posting: any issue, PR or comment on an upstream or public repo (including every LFDT-Paladin repo).
