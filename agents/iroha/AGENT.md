@@ -97,7 +97,7 @@ Operational notes: [`../../iroha3/NOTES.md`](../../iroha3/NOTES.md).
 - `iroha3d` fails when `/storage` is over 80% full (20% reserve). Check headroom before long runs.
 - Mount config via `subPath` (no symlink).
 - Keep `/storage` mode 0700, non-setgid. An `fsGroup` breaks SoraNet.
-- Probes hit `/health`, not `/status/blocks` (it reads 0 after a restart).
+- Probes hit `/livez` (startup, liveness) and `/readyz` (readiness) on the api port, not `/status/blocks` (it reads 0 after a restart): `deploy/k8s/base/statefulset.yaml:75-93`.
 
 ### Iroha escalation triggers
 Send `DECISION NEEDED` to `lead` (TEAM.md §4) when the design does not cover the task, an interface change is needed, or you are blocked past TEAM.md §7 limits. Also send it when:
