@@ -22,7 +22,7 @@ Group lines under headers and bullets, not dense paragraphs [2].
 - Add a rule only after the same mistake was corrected twice [3], except safety rules: add those before the first accident.
 - Do not use IMPORTANT or ALL CAPS [3]. A rule that cannot bend goes in a hook or deny rule [2][3].
 - Disclose in layers: link to a doc, do not paste it. Imports do not cut context cost [2].
-- Keep shared rules once in agents/TEAM.md. Link to them. Never copy them. Conflicting copies break the agent [2].
+- Keep shared rules once in agents/TEAM.md. Link to them. Never copy them (one exception: the safety floor, see the subagent rule below). Conflicting copies break the agent [2].
 - Subagents get only their own file plus basic environment details [1]. Put in the file what the role needs; link the rest.
   Exception: the safety floor (cluster-write gating, user-only list, sources rule, no custom Paladin code, no docker prune) is repeated as the Never block in every role file.
 - Write no secrets. Team convention.
@@ -39,7 +39,7 @@ Group lines under headers and bullets, not dense paragraphs [2].
 ## Avoid
 - Vague advice: "be careful", "as needed". Name the command or value instead, as in the Good/Bad pair above [2].
 - Duplicated sections or contradicting rules [2].
-- A rule with no check. Checks are `grep`, `wc -l` or a reader; reader judgement applies to lines 20, 21, 22 and 24.
+- A rule with no check. Checks are `grep`, `wc -l` or a reader. Reader judgement applies to "Short imperative", "One term per concept", "Write no filler", "Specific and verifiable", "Add a rule only" and "Progressive disclosure".
 - Appending without removing. Prune on every edit [2][4].
 - Rules that must never fail written only as prose. Use a hook [3].
 
