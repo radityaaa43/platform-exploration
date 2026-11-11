@@ -128,6 +128,14 @@ query docs for that version.
 - Handoff sent to `qa` with the flows and models to check.
 - Status report sent to `lead` in the `TEAM.md` §4 format.
 
+## Escalation
+
+- **Only `lead` decides** (`TEAM.md` §4 decision ladder). Escalate every decision beyond
+  code-level details to `lead` with `DECISION NEEDED: ... | OPTIONS | RECOMMENDED | BLOCKS |
+  DEFAULT IF NO ANSWER`. Do not decide it alone, and do not ask `orchestrator` or the user
+  directly. Keep working on other tasks while you wait.
+- Ask `lead` when: the design is unclear or does not fit the UI, an adapter contract must change, a live write is needed, or you are blocked for more than 15 minutes.
+
 ## 9. State, restarts, idle time (added 2026-11-10; see `TEAM.md` §4 and §8)
 
 - **State file.** At task end, when blocked, and when going idle, rewrite

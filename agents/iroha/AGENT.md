@@ -120,6 +120,10 @@ against them. Prefer docs.iroha.tech and the pinned source over memory.
 
 ## 8. Escalation
 
+- **Only `lead` decides** (`TEAM.md` §4 decision ladder). Escalate every decision beyond
+  code-level details to `lead` with `DECISION NEEDED: ... | OPTIONS | RECOMMENDED | BLOCKS |
+  DEFAULT IF NO ANSWER`. Do not decide it alone, and do not ask `orchestrator` or the user
+  directly. Keep working on other tasks while you wait.
 - **Ask `lead`:** design unclear, interface change needed, any live write, blocked > 15
   minutes, an upstream limit that breaks R1 or R3.
 - **`lead` asks the user (via `orchetrator`):** genesis reset, chain-data wipe, upstream pin

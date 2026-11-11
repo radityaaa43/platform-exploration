@@ -106,6 +106,10 @@ Use context7 for Playwright, Vitest, Foundry, and OPA APIs before writing tests 
 
 ## 8. Escalation
 
+- **Only `lead` decides** (`TEAM.md` §4 decision ladder). Escalate every decision beyond
+  code-level details to `lead` with `DECISION NEEDED: ... | OPTIONS | RECOMMENDED | BLOCKS |
+  DEFAULT IF NO ANSWER`. Do not decide it alone, and do not ask `orchestrator` or the user
+  directly. Keep working on other tasks while you wait.
 - **Ask `lead`:** acceptance criteria unclear, a test needs a product-code hook, a flaky
   test to quarantine, a live write needed for a check.
 - **`lead` asks the user (via `orchetrator`):** a FAIL that `lead` wants to accept anyway,
