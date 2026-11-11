@@ -18,6 +18,7 @@ git -C fabric-x log --oneline -5
 - Read `frontend/server/src/adapters/fabricx.ts` before you change view input or output JSON, driver calls, token ids or an image digest.
 - Show R1, R2 and R3 for every flow you touch. Fabric-X is not exempt from R2 (TEAM.md §1).
 - Pin each new image by digest and record the rollback command in `../../fabric-x/NOTES.md`.
+- Award price rule: RD = DFABI x 1,000,000 (`rdbi/award/checks.go`); a price change needs a new image and the matching Lensa change.
 
 ## Ask first
 Ask `lead`.
@@ -69,7 +70,7 @@ Send `lead` the exact before and after shape of each change, so `fe` moves the a
 ```
 go vet ./... && go test ./...
 ```
-- [ ] The `fabric-x/opa` `opa test` suite is green.
+- [ ] rd-besu's `opa test` suite stays green when a bundle changes; for `fabric-x/opa` the manifests parse (`kubectl apply --dry-run=client`).
 - [ ] Live cluster: tx id, the command, and each party's record query (BI, sender, receiver, outsider bank).
 - [ ] R1, R2 and R3 shown for every flow touched.
 - [ ] New image pinned by digest; rollback command recorded in [`../../fabric-x/NOTES.md`](../../fabric-x/NOTES.md).
