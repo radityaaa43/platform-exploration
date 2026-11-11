@@ -78,22 +78,22 @@ Sources: owner files from `besu` (rd-zeto-*, rd-stealth-*), `fabric` (rd-fabricx
 | c1 | rd-stealth-bank-b | statefulset/besu-rpc | no | besu-rpc-nodekey, stealth-rpc-jwt | allow-dns-egress | ALL (allow-dns-egress) | R17 | besu |
 | c1 | rd-stealth-bi | statefulset/besu-rpc | no | besu-rpc-nodekey, stealth-rpc-jwt | allow-dns-egress | ALL (allow-dns-egress) | R17 | besu |
 | c1 | rd-zeto-bank-a | statefulset/besu-validator | no | besu-nodekey | allow-dns-egress | ALL (allow-dns-egress) | R17 | besu |
-| c1 | rd-zeto-bank-a | statefulset/paladin-node2 | no | node2.keys, paladin-node2-mtls | none | ALL (no Egress policy selects it) | R17 | besu |
+| c1 | rd-zeto-bank-a | statefulset/paladin-node2 | no | node2.keys, paladin-node2-mtls | none | NARROW: `paladin-egress` is the only Egress policy selecting the node pod (besu, applied 07:35-07:43 CST; DNS, paladin-pg 5432, besu-validator 8545/8546, peers :9000 by selector or /32) | R17 CLOSED for this role (proof 3 PASS, `agents/qa/REGISTER.md` R17 progress record) | besu |
 | c1 | rd-zeto-bank-a | statefulset/paladin-pg | no | paladin-pg-credentials | allow-dns-egress | ALL (allow-dns-egress) | R17 | besu |
 | c1 | rd-zeto-bank-a | deployment/bank-gw-2 | no | bank-gw-2-mtls, bundle-sink-token | allow-dns-egress | ALL (allow-dns-egress) | R17 | besu |
 | c1 | rd-zeto-bank-a | deployment/bundle-server | no | bundle-sink-token, opa-bundle-signing-bank-a | allow-dns-egress | ALL (allow-dns-egress) | R17 | besu |
 | c1 | rd-zeto-bank-b | statefulset/besu-validator | no | besu-nodekey | allow-dns-egress | ALL (allow-dns-egress) | R17 | besu |
-| c1 | rd-zeto-bank-b | statefulset/paladin-node3 | no | node3.keys, paladin-node3-mtls | none | ALL (no Egress policy selects it) | R17 | besu |
+| c1 | rd-zeto-bank-b | statefulset/paladin-node3 | no | node3.keys, paladin-node3-mtls | none | NARROW: `paladin-egress` is the only Egress policy selecting the node pod (besu, applied 07:35-07:43 CST; DNS, paladin-pg 5432, besu-validator 8545/8546, peers :9000 by selector or /32) | R17 CLOSED for this role (proof 3 PASS, `agents/qa/REGISTER.md` R17 progress record) | besu |
 | c1 | rd-zeto-bank-b | statefulset/paladin-pg | no | paladin-pg-credentials | allow-dns-egress | ALL (allow-dns-egress) | R17 | besu |
 | c1 | rd-zeto-bank-b | deployment/bank-gw-3 | no | bank-gw-3-mtls, bundle-sink-token | allow-dns-egress | ALL (allow-dns-egress) | R17 | besu |
 | c1 | rd-zeto-bank-b | deployment/bundle-server | no | bundle-sink-token, opa-bundle-signing-bank-b | allow-dns-egress | ALL (allow-dns-egress) | R17 | besu |
 | c1 | rd-zeto-bi | statefulset/besu-validator | no | besu-nodekey | allow-dns-egress | ALL (allow-dns-egress) | R17 | besu |
-| c1 | rd-zeto-bi | statefulset/paladin-node1 | no | node1.keys, paladin-node1-mtls | none | ALL (no Egress policy selects it) | R17 | besu |
+| c1 | rd-zeto-bi | statefulset/paladin-node1 | no | node1.keys, paladin-node1-mtls | none | NARROW: `paladin-egress` is the only Egress policy selecting the node pod (besu, applied 07:35-07:43 CST; DNS, paladin-pg 5432, besu-validator 8545/8546, peers :9000 by selector or /32) | R17 CLOSED for this role (proof 3 PASS, `agents/qa/REGISTER.md` R17 progress record) | besu |
 | c1 | rd-zeto-bi | statefulset/paladin-pg | no | paladin-pg-credentials | allow-dns-egress | ALL (allow-dns-egress) | R17 | besu |
 | c1 | rd-zeto-bi | deployment/bank-gw-1 | no | bank-gw-1-mtls, bundle-sink-token | allow-dns-egress | ALL (allow-dns-egress) | R17 | besu |
 | c1 | rd-zeto-bi | deployment/bundle-server | no | bundle-sink-token, opa-bundle-signing-bi | allow-dns-egress | ALL (allow-dns-egress) | R17 | besu |
 | c2 | rd-zeto-bank-c | statefulset/besu-validator | no | besu-nodekey | allow-dns-egress | ALL (allow-dns-egress) | R17 | besu |
-| c2 | rd-zeto-bank-c | statefulset/paladin-node4 | no | node4.keys, paladin-node4-mtls | none | ALL (no Egress policy selects it) | R17 | besu |
+| c2 | rd-zeto-bank-c | statefulset/paladin-node4 | no | node4.keys, paladin-node4-mtls | none | NARROW: `paladin-egress` is the only Egress policy selecting the node pod (besu, applied 07:35-07:43 CST; DNS, paladin-pg 5432, besu-validator 8545/8546, peers :9000 by selector or /32) | R17 CLOSED for this role (proof 3 PASS, `agents/qa/REGISTER.md` R17 progress record) | besu |
 | c2 | rd-zeto-bank-c | statefulset/paladin-pg | no | paladin-pg-credentials | allow-dns-egress | ALL (allow-dns-egress) | R17 | besu |
 | c2 | rd-zeto-bank-c | deployment/bank-gw-4 | no | bank-gw-4-mtls, bundle-sink-token | allow-dns-egress | ALL (allow-dns-egress) | R17 | besu |
 | c2 | rd-zeto-bank-c | deployment/bundle-server | no | bundle-sink-token, opa-bundle-signing-bank-c | allow-dns-egress | ALL (allow-dns-egress) | R17 | besu |
