@@ -78,6 +78,11 @@ def main():
             o, _ = get_json("-n", ns, "get", kind)
             left += len(o["items"]) if o else 0
         check(f"{ns} leftovers (deploy/sts/pod/pvc/svc)", left == 0, str(left))
+        # names only, never data. The aliyun-acr-credential-helper addon adds 2 acr-credential-* dockerconfigjson Secrets per new ns (not ours).
+        out, _ = kubectl("-n", ns, "get", "secret", "-o", "name")
+        secs = [s.split("/", 1)[-1] for s in out.splitlines() if s]
+        extra = [s for s in secs if not s.startswith("acr-credential-")]
+        check(f"{ns} secrets (names; acr-credential-* are the addon's)", not extra, " ".join(secs) or "none")
     if track == "iroha3":
         name, val = t["priorityclass"]
         d, out = get_json("get", "priorityclass", name)

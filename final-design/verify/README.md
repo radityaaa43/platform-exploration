@@ -15,6 +15,9 @@ Role secrets verbs `[create, update, patch]`, no cluster-scoped RBAC by label; z
 `app NotIn (paladin)` and the `lensa-publisher` proxy check (`services/bundle-server --subresource=proxy`); iroha3 adds
 PriorityClass `rd-iroha3-peer` = 10000, not default.
 
+Secrets: only names are listed; the aliyun-acr-credential-helper addon puts 2 `acr-credential-*` dockerconfigjson Secrets in every new namespace (not ours),
+any other Secret before S9 is a FAIL.
+
 Gotchas learned in the L0 windows:
 - `kubectl auth can-i create pods/exec` prints a misleading `yes`; use `create pods --subresource=exec`.
 - `can-i get services/proxy` is `no` when the Role is restricted by `resourceNames`; name the service: `services/bundle-server --subresource=proxy`.
