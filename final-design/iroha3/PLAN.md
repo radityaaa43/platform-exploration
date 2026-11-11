@@ -179,10 +179,11 @@ Peer keys come before the nodes (genesis needs `pop_hex`), so S2 to S5 precede S
 - Sources: `iroha3-rd-dfabi@bc55e68:NOTES.md:22` (M1 race); `iroha3-rd-node-build@ceccc4d:driver/src/pools.rs:4-8,105-111`
 
 ### S16: Lensa per-bank pointers, no keys on the Lensa host
-- DELTA: 10 -> AFTER row: "Lensa: relay + UI, only shared part, NO keys"
-- Owner: fe  Size: M
+- DELTA: 10 + 10a (analyst answer 2026-11-11, PR #32) -> AFTER row: "Lensa: relay + UI, only shared part, NO keys"
+- Owner: fe (Lensa) + iroha (driver server mode)  Size: M
 - Prerequisites: S10, S14, S15; LENSA.md "Namespace references" for `iroha3`
-- Flags: none (transport question in DEVIATION REQUEST)
+- Flags: none
+- Conditions (DELTA 10a, all five required): (1) the driver server mode runs only in that bank's namespace `rd-iroha3-<party>`; (2) it mounts only `<party>.seed` + `<party>.note` (DELTA 1b), never the auditor key (1a); (3) it exposes only the existing `pay`, `dvp-shared`, `wallet` commands, no new chain logic (`driver/src/auditor.rs:1-6` is the existing HTTP mode it extends); (4) reachable only through that bank's gateway envoy+opa with mTLS (S14, AFTER 2a NetworkPolicy row); (5) Lensa holds no key and no kubeconfig. Limit unchanged: two-leg DvP still needs the BI sponsor path until the user decides ADR 0001.
 - Does: `frontend/deploy/forwards.conf:13-18` (`iroha-bi/bank-a/bank-b/bank-c`, `iroha-auditor`) and `lensa.service:3-4` `Wants=/After=` stop naming `iroha3`; `server/state/iroha3.json` `torii.{BI,A,B,C}` and `aps.auditor` point at the four gateways (S14), `aps.mounts.keys` removed, driver image pin updated (`iroha3.json:21`); `iroha3-aps.ts:9-10,34-41` no longer mounts `~/iroha3-keys`; `state/iroha3/{admin,op-*,<party>}.toml` removed from the Lensa host; `cli/bootstrap-iroha3.ts:19,47` and `README.md:22` comments updated. Chain, asset ids and the `rd-dfabi.toml` torii map change with the new chain (`iroha3.json` assets, `accounts`).
 - RED proof: `grep -nE "^\S+\s+iroha3\s" frontend/deploy/forwards.conf` -> 0 lines; `ls /home/ecs-user/iroha3-keys 2>&1` is no longer mounted: `grep -n 'keys' frontend/server/src/adapters/iroha3-aps.ts` -> 0 matches for the mount; `systemctl --user list-units 'lensa-pf@iroha-*' --no-legend` -> empty
 - Rollback: `git revert` of the frontend PR, restore `forwards.conf` and `state/iroha3.json` from the pre-change copy; old namespace still alive until S19
@@ -218,5 +219,5 @@ Peer keys come before the nodes (genesis needs `pop_hex`), so S2 to S5 precede S
 - Rollback: none after delete; restore the named backup `iroha3-final-2026-11-11` into a new namespace (retained PVs rebind by claimRef edit)
 - Sources: CURRENT.md section 12; LENSA.md section 6; Kubernetes docs "Persistent Volumes" (reclaim policy Retain) [version not pinned: unverified]
 
-## DEVIATION REQUEST (sent to `analyst`, copy `orchestrator`, 2026-11-11 by `lead`; S16 stays as written until answered)
-Lead's position: a driver HTTP mode per bank is project code in `iroha3-rd-node-build` (the same repo as the existing `auditor` mode), not chain or Paladin code, so it falls under "settings and project client code" and does not need a target change; if `analyst` disagrees, the user decides. AFTER row: section 2a diagram "Lensa host: relay + UI, NO keys" with "bank-a client ... -> signed requests" and DELTA 10 "per-bank clients". The driver has only CLI commands (`pay`, `dvp-shared`, `wallet`, run by Lensa as `docker run`, `iroha3-aps.ts:37-41`) and one HTTP mode (`auditor`, `auditor.rs:1-6`). A per-bank in-namespace service that Lensa can call, so the seeds stay in the bank namespace, needs a new HTTP wrapper around the existing commands, which is new project code, not an upstream setting, and the AFTER does not say how Lensa reaches a bank's driver. The Paladin no-custom rule does not cover it, but the analyst header says "No custom code beyond what exists". Request: analyst confirms whether a thin driver server mode is inside the AFTER, or whether S16 keeps bank keys off the Lensa host by another route. S16 cannot finish its RED proof until this is answered.
+## DEVIATION REQUEST
+None. The S16 question (per-bank driver HTTP mode) was answered by `analyst` on 2026-11-11: inside the AFTER as project client code, recorded as DELTA 10a (platform-exploration PR #32).
