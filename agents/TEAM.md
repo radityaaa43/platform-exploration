@@ -242,7 +242,10 @@ Role files add role-specific skills on top of this list (section "Skills" in eac
   ready and in parallel with other work. Run independent test suites concurrently.
 - **Parallel by default (user, 2026-11-11).** Before starting a task, split it into independent
   sub-steps and run them at the same time: as parallel subagents sent in one message, and in
-  separate git worktrees (outside the parent checkout) when files can overlap.
+  separate git worktrees when files can overlap. Worktrees and helper clones live inside the project folder they belong to,
+  under `<project>/.worktrees/<name>` (`platform-ekplorasi/.worktrees/` for the parent repo), git-excluded through that repo's
+  `.git/info/exclude` (user rule 2026-11-11). Nothing lives as a sibling in `~/project/rd`. Create with `git -C <repo> worktree
+  add`, move with `git worktree move`, remove with `git worktree remove` when the branch is merged or pushed.
   1. At most 4 subagents per agent at once, with disjoint file sets.
   2. Reads run in parallel. Live writes stay serial under `flock` (below). A subagent never
      does a live write; only the agent holding the `lead` GO does.
