@@ -17,3 +17,6 @@ besu/docs/icma-bdt-v1.2/
 /fabric-x/
 /frontend/
 /iroha3/
+
+# per-agent local state handoff (see agents/TEAM.md section 4)
+agents/*/STATE.md

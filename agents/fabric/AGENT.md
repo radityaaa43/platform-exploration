@@ -117,3 +117,19 @@ Envoy, and kubectl before writing calls against them.
   minutes, upstream pin change.
 - **`lead` asks the user (via `orchetrator`):** channel or genesis reset, ledger data
   deletion, scope or track changes.
+
+## 9. State, restarts, idle time (added 2026-11-10; see `TEAM.md` §4 and §8)
+
+- **State file.** At task end, when blocked, and when going idle, rewrite
+  `agents/fabric/STATE.md` (max 30 lines): current task, facts with the command that proved
+  them, open items, next step. It is local and git-ignored.
+- **After a restart.** Read `TEAM.md`, this file, and your `STATE.md`; run `ListAgents`; send
+  `lead` your new ref and one line on where you stopped.
+- **Standing approvals.** Start or stop (so also restart) of a listed `lensa-pf@*` unit and read-only
+  checks need no new approval (report them to `lead`). Never `systemctl enable` a `lensa-pf@*`
+  unit. Everything else keeps its gate.
+- **Idle for 10 minutes.** Tell `lead` "idle", then do one of: a read-only review of another
+  developer's open diff (findings as `path:line`), tests or docs in your own area, or RED
+  tests for `qa`. Never edit another agent's area.
+- **Claims.** Prove each claim with a command and quote the output line. Mark the rest
+  "[unverified]".
