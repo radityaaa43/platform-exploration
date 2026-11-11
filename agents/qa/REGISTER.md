@@ -21,6 +21,9 @@ Rule: a platform PASS lists its open R-rows. An open row makes the verdict PARTI
 | R11 | P2 | `lensa-publisher` SA in `rd-zeto-bi` | zeto S20 | open |
 | R12 | P1, P4 | Iroha window-A host forwards + read-lens NOT-RUN | the window-B gateways | open |
 | R13 (FINAL, analyst) | P2 | `party-admin` cannot manage its own RBAC, so every RBAC object in `rd-*-<party>` is operator-created (incl. Role/RoleBinding `reconcile` in `rd-fabricx-bi`, re-rendered at each FSC rollout) | end step: `party-admin` gets roles/rolebindings rights in its own namespace plus the grantable verbs, and BI re-applies `reconcile` with its own credential, quoted | open |
+| R14 | P1-adjacent (standing residual) | The Paladin fork logs `DSN=postgres://paladin:<password>@...` at WARN on every start (upstream behaviour, not patched): the DB password is readable in that pod's logs by that party | NOT closed: ends only with an upstream fix or a config option (relay: lead 2026-11-12, after S21 attempt 2 rolled back at L3 on a `+//` password breaking the DSN URL) | open (standing residual) |
+
+Log-read rule for every check (lead 2026-11-12, R14): any Paladin pod-log read redacts `postgres://...@` BEFORE the output is printed or quoted (for example `kubectl logs ... \| sed -E 's#postgres://[^ ]*@#postgres://<redacted>@#g'`), and uses only the party's OWN credential. A pod-log read that skipped the redaction is a defect of the check: delete the output, do not quote it, report it.
 
 Proof lines `qa` can quote read-only (names and modes only; no Secret value, no key content is ever read):
 - R1: `ls -l ~/.opa-keys ~/.opa-sink-tokens ~/.opa-mtls-party` (listing and modes) and `grep -nE "KUBECONFIG|keyFile|deployerKey" lensa.env` (names only); closes when the directories are absent and the S22 record (names, date, no values) is quoted.
@@ -31,4 +34,5 @@ Proof lines `qa` can quote read-only (names and modes only; no Secret value, no 
 - R8: the 4/4 matrix (`L6-COMMON.md` section 7).
 - R11: `kubectl -n rd-zeto-bi get sa lensa-publisher` NotFound.
 - R12: `lensa.env` forwards absent, gateway URLs present.
+- R14: not closable by qa; each platform PASS lists it as open (standing residual) and quotes that every Paladin log read was redacted.
 - R13: `kubectl -n rd-<platform>-<party> auth can-i create roles --as system:serviceaccount:rd-<platform>-<party>:party-admin` = `yes` (and the grantable verbs), and `kubectl -n rd-fabricx-bi get role,rolebinding reconcile -o jsonpath='{.metadata.managedFields[*].manager}'` shows BI's own admin manager (its own credential, quoted). Today expected `no`: the Zeto `party-admin` Role drift (batch/jobs) is the known sibling.
