@@ -189,6 +189,9 @@ RTT Jakarta to Singapore ≈ 15 ms (measured, API-server path); assume ≤ 30 ms
 4. Discovery: static `trusted_peers` plus address gossip (`peers_gossiper.rs:1-4`); no DNS-SD or seed-node scheme found.
 5. Per-org leg exchange is still not in upstream (section 2); the topology does not change it.
 
+### Resolved 2026-11-11 (after lead's team review): address-only move needs no re-signed genesis
+`GenesisTopologyEntry { peer: PeerId, pop_hex: Option<String> }` (iroha@071e281e crates/iroha_genesis/src/lib.rs:3070-3076) and `PeerId { public_key }` only (crates/iroha_model_base/src/peer.rs:44-47). The socket address lives in `Peer { address, id }` (crates/iroha_data_model/src/peer.rs:34-39), which is runtime config (`trusted_peers`), not genesis. Moving bank C's peer to cluster 2 with the same key is a config change on every peer plus restart; the 3f+1 signing rule (lib.rs:3829-3860) applies only when the key set changes. TEAM RESPONSE: besu withdrew "shared CA" (DirectCertVerification default true, config.go:45, grpc_transport.go:126; cross-cluster cert needs subject CN = registered node name); iroha withdrew "no genesis reset" for key-set changes; block_cadence_ms accepted.
+
 ## 3. DELTA (numbered)
 
 | # | What | Source | Objective | Files / objects | Cost |
