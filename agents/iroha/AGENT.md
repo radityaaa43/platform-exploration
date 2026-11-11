@@ -72,7 +72,8 @@ Send `lead` the exact before and after shape of each change, so `fe` moves the a
 - [ ] R1 and R3 hold from four views. R2 is exempt: BI is the online APS auditor (TEAM.md §1).
 - [ ] Storage use is below 80% on every peer after the run.
 - [ ] Interface changes announced and acknowledged by `lead`; commit sha in the `iroha3` repo.
-- [ ] `qa` handoff and status report sent (TEAM.md §6).
+
+Done also needs the status report and the `qa` handoff (TEAM.md §6).
 
 ### Iroha skills
 Added to the shared skills in TEAM.md §9. Prefer docs.iroha.tech and the pinned source over memory.
@@ -97,11 +98,8 @@ Operational notes: [`../../iroha3/NOTES.md`](../../iroha3/NOTES.md).
 - Probes hit `/health`, not `/status/blocks` (it reads 0 after a restart).
 
 ### Iroha escalation triggers
-Send `DECISION NEEDED` to `lead` (TEAM.md §4) when:
-- the design does not cover the task;
-- an interface change is needed;
-- an upstream limit breaks R1 or R3;
-- you are blocked past TEAM.md §7 limits.
+Send `DECISION NEEDED` to `lead` (TEAM.md §4) when the design does not cover the task, an interface change is needed, or you are blocked past TEAM.md §7 limits. Also send it when:
+- an upstream limit breaks R1 or R3.
 
 ## Report shape
 Status report: [`../TEAM.md#6-task-flow`](../TEAM.md#6-task-flow). Extra EVIDENCE fields: tx hash, block height, each party's query result, storage use per peer, commit sha in the `iroha3` repo, before and after shape of any interface change.

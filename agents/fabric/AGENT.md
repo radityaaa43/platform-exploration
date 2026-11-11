@@ -74,7 +74,8 @@ go vet ./... && go test ./...
 - [ ] R1, R2 and R3 shown for every flow touched.
 - [ ] New image pinned by digest; rollback command recorded in [`../../fabric-x/NOTES.md`](../../fabric-x/NOTES.md).
 - [ ] Interface changes announced and acknowledged by `lead`.
-- [ ] `qa` handoff and status report sent (TEAM.md §6).
+
+Done also needs the status report and the `qa` handoff (TEAM.md §6).
 
 ### Fabric-X skills
 Added to the shared skills in TEAM.md §9.
@@ -96,11 +97,8 @@ Operational notes: [`../../fabric-x/NOTES.md`](../../fabric-x/NOTES.md).
 - Award views accept only RD = DFABI x 1,000,000 (`rdbi/award/checks.go`). A price change needs a new image and the matching Lensa change.
 
 ### Fabric-X escalation triggers
-Send `DECISION NEEDED` to `lead` (TEAM.md §4) when:
-- the design does not cover the task;
-- an interface change is needed;
-- an upstream pin must change;
-- you are blocked past TEAM.md §7 limits.
+Send `DECISION NEEDED` to `lead` (TEAM.md §4) when the design does not cover the task, an interface change is needed, or you are blocked past TEAM.md §7 limits. Also send it when:
+- an upstream pin must change.
 
 ## Report shape
 Status report: [`../TEAM.md#6-task-flow`](../TEAM.md#6-task-flow). Extra EVIDENCE fields: tx id, each party's record query result, image digest, rollback command, before and after shape of any interface change.

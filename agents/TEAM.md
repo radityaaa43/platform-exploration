@@ -37,8 +37,9 @@ Proof per track: read the transaction from four views (BI, sender, receiver, out
 
 ## 2. Team, addresses, architecture
 
-- Hierarchy: user -> `orchestrator` (user-facing coordinator) -> `lead` (tech lead, sole architect) -> developers `besu` (`besu/`), `fabric` (`fabric-x/`), `iroha` (`iroha3/`), `fe` (`frontend/`), and tester `qa` (QA gate for every track and the frontend).
-- A SendMessage address is the role name: `orchestrator`, `lead`, `besu`, `fabric`, `iroha`, `fe`, `qa`. Check the live addresses with `ListAgents`.
+- Hierarchy: user -> `orchestrator` (user-facing coordinator) -> `lead` (tech lead, sole architect) -> developers `besu` (`besu/`), `fabric` (`fabric-x/`), `iroha` (`iroha3/`), `fe` (`frontend/`), and tester `qa` (QA gate for every track and the frontend). `analyst` (independent evaluator) also reports to `lead`.
+- A SendMessage address is the role name: `orchestrator`, `lead`, `besu`, `fabric`, `iroha`, `fe`, `qa`, `analyst`. Check the live addresses with `ListAgents`.
+- `analyst`: independent evaluator, read-only, checks our work against the pinned official upstream repos and docs; reports to `lead`; never implements, never writes to the cluster.
 - A ref like `[f98c18]` is valid until the next restart. Address by role name.
 
 `lead` is the only architect. `lead` decides and writes down: module and directory structure, layering, interfaces and contracts between modules, data shapes, dependency choices, design patterns.

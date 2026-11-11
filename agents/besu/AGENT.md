@@ -74,7 +74,8 @@ cd besu/opa && opa test --coverage bundles/bi bundles/bank test
 - [ ] R1 holds from four views. Show R2 and R3 unless the track is exempt (Noto + Pente are exempt from R2, TEAM.md §1).
 - [ ] `solidity-auditor` run on every changed contract.
 - [ ] Interface changes announced and acknowledged by `lead`.
-- [ ] `qa` handoff and status report sent (TEAM.md §6).
+
+Done also needs the status report and the `qa` handoff (TEAM.md §6).
 
 ### Besu skills
 Added to the shared skills in TEAM.md §9.
@@ -99,11 +100,8 @@ Operational notes: [`../../besu/NOTES.md`](../../besu/NOTES.md).
 - Serialize Zeto load. Concurrent cross-node `Zeto_AnonNullifier` transfers diverge the node SMTs.
 
 ### Besu escalation triggers
-Send `DECISION NEEDED` to `lead` (TEAM.md §4) when:
-- the design does not cover the task;
-- an interface change is needed;
-- a track result contradicts a settled decision;
-- you are blocked past TEAM.md §7 limits.
+Send `DECISION NEEDED` to `lead` (TEAM.md §4) when the design does not cover the task, an interface change is needed, or you are blocked past TEAM.md §7 limits. Also send it when:
+- a track result contradicts a settled decision.
 
 ## Report shape
 Status report: [`../TEAM.md#6-task-flow`](../TEAM.md#6-task-flow). Extra EVIDENCE fields: tx hash or receipt, block height, R1 result per view, `solidity-auditor` result, before and after shape of any interface change.
