@@ -12,7 +12,7 @@ Left to the user. PLAN S12 moves the controllers in either case; only the `renou
 ## Alternatives Considered
 - (a) Keep the bond controllable, the custodian as controller (default; no extra call beyond S12). Pros: refunds of failed escrows keep working; the regulator-style force-transfer power stays for legal or error correction. Cons: one party can move any holder's DFABI: a concentration of power that R1/R2 do not cover.
 - (b) `setControllers([])` (no controller, still renounceable later). Pros: no force-move today. Cons: a failed bond refund in `DvPEscrow` has nobody to resolve it (`:131`); reversible only by the owner calling `setControllers` again.
-- (c) `renounceControl()` (irreversible). Pros: the bond is permanently non-controllable, holders cannot be force-moved. Cons: cannot be undone; refunds waiting for the controller are stranded; no recovery from a lost holder key or a wrong transfer.
+- (c) `renounceControl()` (irreversible; `ERC1400.sol:712-713`). Warning (DELTA 4a): this is not a role move and falls outside the "only role holders move" rule (ARCHITECTURE-stealth.md:66), so it needs the user's explicit decision. Pros: the bond is permanently non-controllable, holders cannot be force-moved. Cons: cannot be undone; refunds waiting for the controller are stranded; no recovery from a lost holder key or a wrong transfer.
 
 ## Consequences
 - (a): S12 as written; CONTRACTS.md keeps `isControllable` true.
