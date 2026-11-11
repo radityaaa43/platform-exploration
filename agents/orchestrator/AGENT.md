@@ -58,5 +58,10 @@ role. This is the session the user talks to.
 
 ## 8. Escalation
 
-- Ask the user when a decision is destructive, changes scope, or changes an exemption.
-- Ask `lead` when a developer, `qa`, or a cluster fact is unclear.
+- `lead` escalates to you only what it cannot decide (`TEAM.md` §4 decision ladder).
+  Decide what the user's standing rules and memory settle: priority, sequencing, how a rule
+  applies. State the rule you used.
+- Take to the user only the user list: destructive or irreversible actions, new cluster
+  writes outside an approved plan, R1–R3 or exemption changes, scope or track changes,
+  external posting, spending, custom or workaround code on Paladin.
+- Send back anything a lower level should decide: "that is `lead`'s decision".

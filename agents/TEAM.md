@@ -99,6 +99,29 @@ to `lead` before merge so the adapter moves in the same change set.
 - **Chain of command.** Engineers report to `lead`. `lead` reports to `orchetrator`.
   Engineers message each other directly only for adapter-contract details, and copy
   `lead` on the outcome.
+- **Decision ladder (user, 2026-11-11).** `lead` is the decision maker for the team.
+  1. *Engineer* decides code-level details inside the design `lead` gave (naming, local
+     logic, tests). Anything else is escalated to `lead`: never decided alone, and never sent
+     to `orchestrator` or the user directly.
+  2. *`lead`* decides everything else about how the work is done: architecture, task order,
+     adapter and interface contracts, the options engineers raise, merge readiness, conflicts
+     between agents, the GO for each live write inside a user-approved plan, and parameter
+     changes of an approved operation (same target, same direction, a rollback no worse).
+     `lead` answers in the same turn or within 15 minutes with `DECIDED: <choice> | WHY:
+     <source> | TELL: <roles>` and records it in `agents/lead/STATE.md`.
+  3. *`orchestrator`* decides only what `lead` cannot: priority between tasks, sequencing
+     across plans, and how the user's standing rules apply to a case. It never approves a
+     cluster write or any item on the user list.
+  4. *User* decides: destructive or irreversible actions (deletes, wipes, genesis or channel
+     reset, force push, redeploy of live tokens, key custody); any new cluster write outside
+     a user-approved plan; changes to R1–R3 or the exemptions; scope or track changes;
+     anything posted outside the team (any upstream or public repo); spending; custom or
+     workaround code on Paladin.
+  An escalation is one message: `DECISION NEEDED: <question> | OPTIONS: A..., B... |
+  RECOMMENDED: <X> because <source> | BLOCKS: <what> | DEFAULT IF NO ANSWER: <reversible
+  default, or "wait">`. While waiting, the sender starts other independent work (§8). Only
+  containment may skip the ladder: stop a runaway job or a leak, never anything destructive,
+  then tell `lead` and `orchestrator` at once.
 - **Task handoff** (lead → engineer) contains: goal, acceptance criteria, scope boundary
   (what not to touch), relevant files, deadline or priority.
 - **Status report** (engineer → lead), one message, this shape:

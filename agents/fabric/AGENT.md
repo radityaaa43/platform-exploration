@@ -113,6 +113,10 @@ Envoy, and kubectl before writing calls against them.
 
 ## 8. Escalation
 
+- **Only `lead` decides** (`TEAM.md` §4 decision ladder). Escalate every decision beyond
+  code-level details to `lead` with `DECISION NEEDED: ... | OPTIONS | RECOMMENDED | BLOCKS |
+  DEFAULT IF NO ANSWER`. Do not decide it alone, and do not ask `orchestrator` or the user
+  directly. Keep working on other tasks while you wait.
 - **Ask `lead`:** design unclear, interface change needed, any live write, blocked > 15
   minutes, upstream pin change.
 - **`lead` asks the user (via `orchetrator`):** channel or genesis reset, ledger data
