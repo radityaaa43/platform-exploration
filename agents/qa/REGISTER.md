@@ -22,6 +22,7 @@ Rule: a platform PASS lists its open R-rows. An open row makes the verdict PARTI
 | R12 | P1, P4 | Iroha window-A host forwards + read-lens NOT-RUN | the window-B gateways | open |
 | R13 (FINAL, analyst) | P2 | `party-admin` cannot manage its own RBAC, so every RBAC object in `rd-*-<party>` is operator-created (incl. Role/RoleBinding `reconcile` in `rd-fabricx-bi`, re-rendered at each FSC rollout) | end step: `party-admin` gets roles/rolebindings rights in its own namespace plus the grantable verbs, and BI re-applies `reconcile` with its own credential, quoted | open |
 | R14 | P1-adjacent (standing residual) | The Paladin fork logs `DSN=postgres://paladin:<password>@...` at WARN on every start (upstream behaviour at `paladin@v1.0.0 6d4b913 core/go/pkg/persistence/gorm.go:133`, not patched): the DB password is readable in that pod's logs by that party | NOT closed: accepted upstream residual, ends only with an upstream fix or config; the interim terms below hold until then (analyst via lead 2026-11-12) | open (accepted upstream residual) |
+| R15 (informational) | P4 / P1-adjacent | ghcr packages `iroha3-rd-node` and `iroha3-rd-driver` are PUBLIC (anonymous pull works); our node-build and driver code are publicly downloadable; no key material inside (CI content check "no key material" on every build); other packages (`rdbi-node-ci`, `fabricx-tools-ci`, paladin fork) are private. Source: orchestrator relay via `lead` 2026-11-12 (verbatim) | End step: visibility private (GitHub package settings; the REST API does not change container visibility, so it is a UI step) = the user's end list, NOT done by agents | open (informational) |
 
 R14 interim terms (analyst via lead 2026-11-12), each a read-only check qa quotes:
 1. Pod logs of `paladin-node*` are read only with the party's own credential; any operator read goes through `sed -E 's#(postgres://[^:]+:)[^@]+@#\1***@#'` BEFORE output. A read that skipped the redaction is a defect of the check: delete the output, do not quote it, report it.
@@ -29,6 +30,11 @@ R14 interim terms (analyst via lead 2026-11-12), each a read-only check qa quote
 3. Any value seen in a session output is rotated in-pod after the exposure: the quoted proof is the Secret `resourceVersion` before and after the rotation (rv only, never a value).
 4. The DSN template URL-encodes the password or uses hex-only characters, with a render test on `+`, `/` and `@` (the S21 attempt-2 failure: a password with `+//` broke the DSN URL): qa reads the test name and its PASS output from the owner.
 5. The upstream issue is drafted by the analyst; posting is PARKED (user-only). qa reports R14 as open (accepted upstream residual) in every Zeto/Noto/Pente PASS.
+
+R15 terms (analyst via lead 2026-11-12): R15 is informational, not a principle break. Three terms, each quoted by its owner and read by qa:
+1. Content proof: no `client.toml`, seed, note key, genesis private material, kubeconfig or internal endpoint/ACL id in the 2 public images: a file-listing grep and a PEM scan of each image, quoted by `iroha`.
+2. No new public packages: CI asserts package visibility before the first deploy of any digest.
+3. Before the user's flip to private: all `rd-iroha3-*` pod specs carry the `ghcr-pull` pull secret, and a same-spec uncached pull test runs in all four namespaces (x4); the flip is made only after that, then a 4/4 Running re-read (`L6-COMMON.md` section 7) is quoted.
 
 Proof lines `qa` can quote read-only (names and modes only; no Secret value, no key content is ever read):
 - R1: `ls -l ~/.opa-keys ~/.opa-sink-tokens ~/.opa-mtls-party` (listing and modes) and `grep -nE "KUBECONFIG|keyFile|deployerKey" lensa.env` (names only); closes when the directories are absent and the S22 record (names, date, no values) is quoted.
@@ -39,5 +45,6 @@ Proof lines `qa` can quote read-only (names and modes only; no Secret value, no 
 - R8: the 4/4 matrix (`L6-COMMON.md` section 7).
 - R11: `kubectl -n rd-zeto-bi get sa lensa-publisher` NotFound.
 - R12: `lensa.env` forwards absent, gateway URLs present.
+- R15: informational, not closable by qa: each platform PASS lists it; what qa can quote read-only is that the pull test of the two public images worked anonymously (`L6-COMMON.md` gate item 6) and the CI "no key material" check line of the last build (owner quotes it). Closing proof (the user's UI step): an anonymous pull of both packages is REFUSED.
 - R14: not closable by qa; each platform PASS lists it as open (standing residual) and quotes that every Paladin log read was redacted.
 - R13: `kubectl -n rd-<platform>-<party> auth can-i create roles --as system:serviceaccount:rd-<platform>-<party>:party-admin` = `yes` (and the grantable verbs), and `kubectl -n rd-fabricx-bi get role,rolebinding reconcile -o jsonpath='{.metadata.managedFields[*].manager}'` shows BI's own admin manager (its own credential, quoted). Today expected `no`: the Zeto `party-admin` Role drift (batch/jobs) is the known sibling.
