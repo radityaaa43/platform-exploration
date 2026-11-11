@@ -120,7 +120,7 @@ Key fact for the order: any change of an Arma party address or any new CA/MSP me
 - Flags: BLOCKED(orderer party placement X/Y), CLUSTER-OP
 - Does: per org STS `orderer-{router,batcher,consenter,assembler}-<N>` (images `fabric-x-orderer:1.0.4` by digest, 2Gi PVC each, `alicloud-essd-wffc`, zone `ap-southeast-5b`), Services; cross-party ports open via NetworkPolicy (consenter BFT, batcher, router mTLS). Party 4 follows in S18. Disk-attach slots on cluster 1 are the risk (CURRENT section 6: 5/5 on one node).
 - RED proof: `kubectl -n rd-fabricx-bi get sts -o wide` all `1/1`; orderer logs of party 1 show a leader with 3 parties up (N=4, F=1) [log line unverified].
-- Rollback: `kubectl delete sts,svc,pvc -l part-of=arma -n rd-fabricx-<x>` (new, empty ledger; user-only).
+- Rollback: `kubectl delete sts,cm,netpol -l app.kubernetes.io/part-of=rd-fabricx -n rd-fabricx-<x>` and the 4 PVCs by name (objects carry `app.kubernetes.io/part-of: rd-fabricx`, rd-fabric-x #23 5e103a7; Services belong to the S16 LB render) (new, empty ledger; user-only).
 - Sources: orderer@dd296e3:docs/architecture.md:178-185; deployment/README.md:44-61
 
 ### S12: Committer per org
