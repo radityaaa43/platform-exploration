@@ -1,6 +1,6 @@
 # 0001. Orderer and committer party placement across two clusters (X/Y)
 Date: 2026-11-11
-Status: proposed
+Status: accepted (user decision 2026-11-11, README row 13: option 3/1 re-genesis, balances do not carry; endpoint decision A `<role>-<N>.arma.rd` + hostAliases)
 Deciders: user
 
 ## Context
