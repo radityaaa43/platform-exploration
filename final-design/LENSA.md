@@ -2,6 +2,7 @@
 
 Skills loaded first: `superpowers:verification-before-completion` (each claim = command + cited line; unproven = [unverified]), `ecc:evm-token-decimals` (units, section 3), `ecc:deployment-patterns` (section 4). `ecc:code-explorer` is an agent type here, not a skill: skipped; the path:line map is built by hand (grep/sed) plus 2 read-only sonnet subagents whose lines I re-read (sampled 15 cites, all matched).
 Rules kept: field and file NAMES only; no key, token, seed or kubeconfig content printed. Paths relative to `frontend/` unless prefixed `besu/`, `iroha3/`. Contract addresses are public chain data and are listed.
+`[unverified]`: 9 items, all listed in section 5 (inline markers in 1.2, 3, 5). Section numbers 1.1, 1.2, 1.4, 1.5, 2, 3, 4.1, 4.2, 5, 6, 7 are cited by README and the PLAN files: do not renumber.
 
 ## 0. One-screen summary
 - Lensa holds NO private ledger key for Zeto, Noto, Fabric-X. It holds raw private keys for Stealth (all banks + BI) and the Iroha 3 party/operator toml keys on disk. It also holds 4 OPA bundle-signing keys and a cluster kubeconfig (admin-style, one for all namespaces).
@@ -45,12 +46,13 @@ Rules kept: field and file NAMES only; no key, token, seed or kubeconfig content
 ### 1.5 What would move under principle 1 (Lensa holds no bank key)
 | Moves to per-bank component | Stays in Lensa |
 |---|---|
-| Stealth `banks.*` keys, `pool[]`, bank scans, bank-side signing, `sent` log; BI needs a "disclosure" call or the banks' view keys (`S:120`) | BI `deployerKey`+`biMeta` (BI component), public reads (`network`, `receipt`) |
+| Stealth `banks.*` keys, `pool[]`, bank scans, bank-side signing, `sent` log; BI `deployerKey` + `biMeta` also leave Lensa: they move to the BI signer and scanner in `rd-stealth-bi` (stealth S10, S15; Lensa copy removed at S21); BI scans via the banks' view-key handover (README row 26, stealth S11) | public reads (`network`, `receipt`), intent building from public meta-addresses |
 | Iroha `<bank>.toml`, `op-<bank>.toml`, `aps.mounts.keys` wallets, `bin/iroha`, docker driver per bank | `iroha3-intent.py`, `iroha3-norito.ts`, `health/network`, `FLOWS`, journal (`pools/lensa-journal.json`, records counterparties) |
 | Zeto/Noto: bank `PaladinClient`s, `transfer`, bank half of `swap`/`executeOutright`, `reportTo`, bank mTLS cert | BI client, `BiLedger`, `state/zeto.json`, `state/noto/*` (no keys) |
 | Fabric-X: nothing key-wise (already per-party gateway); drop the kubectl paths (`F:86-102,169,188,323-324,399`) = need gateway ops for ledger/history/health | orchestration, `exclusive()` locks, `recoverCut`, deadlines, lens assembly |
-| Policy: each owner signs its own bundle (README "Not done" #3) and applies its own ConfigMap | Publisher UI + status read |
+| Policy: each owner signs its own bundle (README "Not done" #3) and applies its own ConfigMap | Publisher UI; status read only through a gateway route (below) |
 - Cross-cutting: `besu-network.ts:18-20` reuses the Fabric-X kubeconfig for ns `besu`; removing it breaks the Besu network view of 3 models.
+- Two Lensa reads still need a kube credential today: the Publisher sink-status read (`kube.ts:65`, API-server proxy of `bundle-server:sink`) and the Besu pod listing (`besu-network.ts:20`). Target: no kube credential. Status = gateway HTTP route to the sink `/status`; network view = JSON-RPC `net_peerCount`, `eth_syncing`, `eth_blockNumber` through the bank gateway. Only interim exception, if the status route is not ready at zeto S20: `get services/proxy` on `bundle-server` in `rd-zeto-bi` (no secrets, no other namespace, removal step inside zeto S20). No `lensa-viewer` ServiceAccount.
 - Hard: Zeto `swap` (`flows.ts:118-133`) and Noto `executeOutright` (`outright.ts:125`) need both parties' clients in one call; Stealth DvP needs a BI certificate before the bank's tx (`S:382-386,411`).
 
 ## 2. Contract and token inventory as Lensa knows it (addresses are public)
@@ -88,16 +90,20 @@ Rule for the new design: never hardcode 1e6/1e18; carry unit + scale per token i
 4. Web: `deploy/update.sh:5-15` builds `web/dist.new` (`tsc --noEmit`, `vite build`), swaps `web/dist`, `systemctl --user restart lensa`; `server/src/main.ts:8` serves `web/dist` itself (no separate web server). Rollback = old dist + `git checkout` + restart (done on 2026-11-11, 28c8bdb).
 5. Install: `deploy/install.sh:7-14` symlinks units into `~/.config/systemd/user`, creates `lensa.env` (umask 077) if missing, `enable` only.
 6. Release flow: PR to `rd-lensa-frontend` main, `lead` merges, host step by `lead`/`fe` (pull ff-only, build, restart). CI = web + self-contained server tests (siblings are private repos).
-### 4.2 What a per-bank namespace world changes (analysis, not verified in cluster)
-- Forwards: today the 4 Paladin and 4 Fabric-X forwards are already per party; Besu is one shared door plus 3 per-bank doors; Iroha is per party. Per bank namespace: one forward set per bank namespace (and `kubectl` context/kubeconfig per bank, namespace-scoped), so `forwards.conf` gains a kubeconfig column or the unit gets `KUBECONFIG` per name; 17 → ≥ 4 per-bank groups plus BI.
-- Credentials: replace the single admin-style `KUBECONFIG` by one namespace-scoped credential per bank held by that bank's component; Lensa keeps only an mTLS client cert per bank (or one relay token), no kubeconfig, no toml/stealth keys. `OPA_KEYS_DIR` goes to each owner.
-- Config: `lensa.env` per bank (ports, gateway URLs, cert dir) or a registry file Lensa reads; `state/*.json` keeps only public addresses (section 2); secret fields in 1.2 leave.
+### 4.2 Target (analyst AFTER on every platform: "Lensa relay: no kubeconfig of any org") and what goes away
+- Target: Lensa reaches each party's gateway at `https://<ip>:<port>` (NodePort on cluster 1, LoadBalancer on cluster 2) with a per-party mTLS client cert. No `kubectl port-forward`, no kubeconfig of any org on the Lensa host, no toml/stealth/bundle-signing keys. `LENSA_GW_MTLS_DIR` holds per-party subfolders and `gwAgent` returns that party's cert only (zeto S19, `gateway.ts:8-17`).
+- Forwards that go away (`deploy/forwards.conf` line numbers as in 4.1 item 3; names stay valid in `lensa.service:3-4` until the cutover step removes them):
+  - Paladin `paladin-node1..4` (`:3-6`) and Besu `besu`, `besu-bank-a/b/c` (`:8,10-12`): zeto S19/S20; noto S12 (shares the same four forwards); stealth S19 (the Besu lines become `st-gw-N` gateway URLs).
+  - Fabric-X `fabricx-gw-1..4` (`:20-23`): fabricx S19.
+  - Iroha `iroha-bi/bank-a/bank-b/bank-c`, `iroha-auditor` (`:13-16,18`): iroha3 S16. `dvp-shared` stays on the Lensa host with the Iroha seeds as a recorded gap until README row 18.
+- Config: `lensa.env` carries gateway URLs and the cert dir per party (names only); `pf.sh` and the `KUBECONFIG` / `FABRICX_KUBECONFIG` entries are removed with the last forward. `state/*.json` keeps only public addresses (section 2); secret fields in 1.2 leave (stealth S21, iroha3 S16).
+- Publisher / network view: no kube credential, see 1.5 (gateway status route and JSON-RPC through the bank gateway).
 - Release: one Lensa unit stays (UI + fan-out for the 4-party side-by-side view); each bank component gets its own deploy/rollback in its namespace (rolling/blue-green per `ecc:deployment-patterns`; backward-compatible relay API versioned, since Lensa and bank components roll separately). Health: Lensa `/api/health` already aggregates per model (`app.ts`); needs per-bank health + a "relay API version" field.
 - Repo layout: the relative sibling imports must go (CONTRACTS.md: ABI/config as data or a package), otherwise Lensa cannot be built or tested without the chain repos.
 - Risk: the demo's outsider/other-bank views need each bank component to answer "what can bank X see of this tx"; Lensa must not hold a bank's secret to compute it.
 
 ## 5. Open / unverified
-- [unverified] live `config.json` `bearer`/`tlsInsecure` for Paladin clients; cluster-side enforcement that each `fx-gw` holds only its party's key; whether `~/iroha3-keys` equals `state/iroha3/keys`; bi-auditor caller authentication; `cert()` body in `besu/stealth-address/ts/chain.ts`; DFABI stealth bond scale; Iroha asset scale.
+- [unverified] live `config.json` `bearer`/`tlsInsecure` for Paladin clients; cluster-side enforcement that each `fx-gw` holds only its party's key; whether `~/iroha3-keys` equals `state/iroha3/keys`; bi-auditor caller authentication; `cert()` body in `besu/stealth-address/ts/chain.ts`; DFABI stealth bond scale; Iroha asset scale; Fabric-X 64-bit amount width (team notes, not seen in code); the siblings' own CI.
 - Not touched: any value of a key/token/kubeconfig; no cluster command except none (state field names read locally; one failed plain `eth_call`).
 
 ## 6. Namespace references (for "Decommission <old namespace>": what in Lensa, lensa-pf@*, OPA bundle server, CI still points at it)
@@ -119,3 +125,18 @@ Decommission prerequisite, checkable in one pass (read-only, from the repo root 
 - `python3 -c "import json;print(json.load(open('frontend/server/state/fabricx.json'))['namespace'])"` ≠ `<ns>`; `state/iroha3.json` `torii`/`aps.auditor` ports must target the NEW forwards; `~/.config/lensa/lensa.env` `KUBECONFIG`/`FABRICX_KUBECONFIG` context must not need the old namespace.
 - OPA: no `<name>-gw-N` Deployment, `bundle-server` or ConfigMap left in `<ns>` that Lensa's Publisher reads (`kube.ts:22` guard allows only `*-gw-[1-4]` and `*-gw-[1-4]-bundles`; `kube.ts:65` reads the sink).
 - CI: nothing (`ci.yml` has no cluster reference); the siblings' own CI [unverified].
+
+## 7. Pointer map: each Lensa change to its plan step and DELTA (numbers as in the PLAN files on `origin/fd-*` at 2026-11-11; DELTA numbering is per platform)
+| Lensa change | Step | DELTA | Where in this file |
+|---|---|---|---|
+| Per-party client cert (`gwAgent`), 8 Paladin/Besu forwards become gateway URLs, `pf.sh` kubeconfig column dropped | zeto S19 | 2, 1 | 1.1, 4.2, 6 row `paladin` |
+| Publisher namespace (`kube.ts:3`), Besu network view (`besu-network.ts:20`), sink status route; admin kubeconfig leaves the host | zeto S20 | 2 | 1.5, 6 rows `paladin`, `besu` |
+| Noto: per-bank credential env, same four forwards as Zeto, `noto.json` unchanged | noto-pente S12 (code: S8 fe sub-step, S11) | 8 | 1.2, 6 row `paladin` |
+| Stealth: relay adapter, delete `deployerKey`, view/spend/identity keys, `pool`, `cert()` from `stealth.ts` | stealth S18 | 1, 2 | 1.2, 1.4, 1.5 |
+| Stealth: Besu lines become four `st-gw-N` gateway lines | stealth S19 | 1, 7 | 4.2, 6 |
+| Stealth: cutover party by party; BI signer and scanner in `rd-stealth-bi` (S10), `deployerKey` retired (S15) | stealth S20 (S10, S15) | 1, 2, 3, 5, 6 | 1.5 |
+| Stealth: remove key fields from `state/stealth.json` | stealth S21 | 1 | 1.2 |
+| Fabric-X: drop `kubectl`/psql/`FABRICX_KUBECONFIG` from the adapter | fabricx S4 | 1 | 1.5, 6 row `fabricx` |
+| Fabric-X: gateways at `https://<ip>:<port>`, drop `fabricx-gw-*` forwards and `state/fabricx.json` `kubeconfig`/`namespace` | fabricx S19 | 1, 9 | 4.2, 6 |
+| Iroha 3: forwards and `iroha3.json` ports to gateways, `pay`/`wallet` to bank driver services, seeds off the host; `dvp-shared` interim exception until README row 18 | iroha3 S16 | 10, 10a | 1.2, 4.2, 6 row `iroha3` |
+Mismatch to settle: lead's brief gave "zeto S19/S20 DELTA 1,9"; zeto PLAN says S19 = 2,1 and S20 = 2 (1,9 is fabricx S19). This table follows the PLAN files.
