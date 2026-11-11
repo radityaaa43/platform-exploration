@@ -87,7 +87,7 @@ Key fact for the order: any change of an Arma party address or any new CA/MSP me
 - DELTA: 6 -> AFTER row: "Each org holds its own admin key; channel changes need a MAJORITY of org admins"
 - Owner: fabric  Size: M
 - Prerequisites: ADR 0003 (user)
-- Flags: BLOCKED(lifecycle policy 4-of-4 vs MAJORITY)
+- Flags: BLOCKED(lifecycle policy 4-of-4 vs MAJORITY), CLUSTER-OP (admin key Secrets per org)
 - Does: per org admin key created in its namespace (S9); `multiorg/cfgupdate/main.go:123` `SignedByNOutOfGivenRole(len(allMSPIDs), ...)` set to the user's choice; `check-genesis` run with the 4 org admin MSPs separately.
 - RED proof: `go run . check-genesis -block <new> -msp <org1-admin>` alone: `FAIL ... not satisfied by Org1 admin alone`; with a majority: `PASS`.
 - Rollback: discard the unpublished genesis inputs.
@@ -108,7 +108,7 @@ Key fact for the order: any change of an Arma party address or any new CA/MSP me
 - Owner: fabric  Size: M
 - Prerequisites: S6 outcome (PASS, or FAIL with the analyst DEVIATION REQUEST answered), S8, S9 (its public-material exchange done by hand, out of band), ADR 0001
 - Flags: BLOCKED(orderer party placement X/Y), user-only (new ledger), CLUSTER-OP (ConfigMaps)
-- Does: build genesis from the public material: hosts/ports per ADR 0001, `V3_0/V2_0/V2_5`, Idemix MSP + `known_certs` if S6 PASS, lifecycle policy per S8, `UseTLSRouter/UseTLSAssembler` TLS; `check-genesis` PASS; `sha256` published to all orgs; create ConfigMap `genesis-block` in each namespace from the host-side block.
+- Does: build genesis from the public material: hosts/ports per ADR 0001, `V3_0/V2_0/V2_5`, Idemix MSP + `known_certs` if S6 PASS, lifecycle policy per S8, `UseTLSRouter/UseTLSAssembler` TLS; `check-genesis` PASS; `sha256` published to all orgs; create ConfigMap `genesis-block` in each namespace from the host-side block. Merging the per-org MSP trees into one baseDir for the assembler (DELTA 3a) is [unverified] on this tool version.
 - RED proof: `go run . check-genesis -block <new> -msp <majority admins>` -> `PASS ValidateNewConfig LifecycleEndorsement`, `MSP 4`; `sha256sum` of the host-side genesis file (CURRENT section 8 method) equals the value published to all orgs, and the `genesis-block` ConfigMap content in each namespace hashes to the same value (no Secret data read).
 - Rollback: discard; old genesis `b9c342d7...02769ab` still runs in `fabricx`.
 - Sources: orderer@dd296e3:config/party_shared_config.go:11-68, docs/architecture.md:148-153,187; fabric-x multiorg/cfgupdate/main.go:132; CURRENT.md section 8
@@ -156,10 +156,10 @@ Key fact for the order: any change of an Arma party address or any new CA/MSP me
 ### S15: Remove `ids/anon` and the FSC full-certificate patch
 - DELTA: 5 -> AFTER row: "FSC `idemix` label then maps to it, dropping `ids/anon`"
 - Owner: fabric  Size: M
-- Prerequisites: S6 PASS, S14 (an S6 FAIL is a DEVIATION REQUEST to analyst; S15 does not run until it is answered)
+- Prerequisites: S6 PASS, S14 (an S6 FAIL is a DEVIATION REQUEST to analyst; S15 does not run until it is answered; if the answer is "keep ids/anon", S15 becomes a decision record, the shared submitter key stays as an accepted gap against DELTA 5, and S20/S22 proceed)
 - Flags: CLUSTER-OP (redeploys node pods)
 - Does: remove `ids/anon` (README.md:118-121) from node configs and `patches/fsc-full-certificate.patch`; nodes use certificate-ID resolved from `known_certs`.
-- RED proof: `ls ids/anon` in each pod: absent; transfer confirmed; before: the patch applies in the image build.
+- RED proof: `ls ids/anon` in each pod: absent; `kubectl -n <ns> get secret rdbi-<node>-files -o json | jq -r '.data|keys[]' | grep -c anon` = 0 in every namespace incl. `rd-fabricx-bank-c` on cluster 2 (names only, inside the S15 window); the destruction record (date, namespace, operator) is in CURRENT.md; transfer confirmed; before: the patch applies in the image build and the key name is present.
 - Rollback: redeploy previous digest (S2 pin list).
 - Sources: panurus-itest/README.md:115-121; committer@08a469d:docs/namespace-policy.md:320-331
 
@@ -229,7 +229,7 @@ Key fact for the order: any change of an Arma party address or any new CA/MSP me
 - Prerequisites: S20 qa PASS on rd-fabricx-* for every flow + BI-balance proof; no pointer left (LENSA.md section 6 checks: forwards.conf 0 lines for `fabricx`, `lensa.service:3-4`, `state/fabricx.json`, `lensa.env`, `fabricx.ts:486`, `besu-network.ts:20`, `forwards.conf:20-23`, bundle-server NetworkPolicy namespaceSelector `fabricx` from rd-besu #9, `agents/ops/post-reboot-check.sh:8`, host-side committer `compose.yaml:38-41`, `scripts/assemble.py`, `reconcile.py:15,22`, `netshim.go:16-18`; CI none); named backup taken first; restore of one snapshot into a scratch PVC verified
 - Flags: user-only, CLUSTER-OP (own approval then), destructive
 - Does: (1) inventory = CURRENT.md section 14: deployments=20 statefulsets=24 pods=42 services=60 networkpolicies=4 persistentvolumeclaims=28 configmaps=41 secrets=51; PVC total 28 x 2Gi = 56Gi. (2) PV reclaimPolicy is `Delete` for all 28 (`alicloud-essd-wffc reclaim=Delete`): FIRST patch the 28 PVs to `Retain`, or copy; (3) backup `fabricx-final-2026-11-<dd>`: snapshot or export of the 16 `data-orderer-*-0`, `data-committer-sidecar-0`, `data-committer-db-0`, `rdbi-{bi,bank2,bank3,bank4}-state`, 5 `data-fca-*-db-0`, plus `~/.fabricx-token` (201M) archive. VolumeSnapshot is supported on cluster 1 (`kubectl get volumesnapshotclass` -> `alibabacloud-disk-snapshot diskplugin.csi.alibabacloud.com Delete 433d`) but its deletionPolicy is Delete: a surviving backup needs a Retain VolumeSnapshotClass (new cluster-scoped object = write, part of this CLUSTER-OP). (4) then `kubectl delete ns fabricx`. Scope cluster 1 only; cluster 2: nothing is ever deleted. Nothing executes now.
-- RED proof: `kubectl get ns fabricx` -> `NotFound`; `kubectl get pv | grep -c fabricx` = backup PVs only; `/api/health` all models ok; `lensa-pf@fabricx*` units on new targets.
+- RED proof: `kubectl get ns fabricx` -> `NotFound`; `kubectl get pv | grep -c fabricx` = backup PVs only; `/api/health` all models ok; `systemctl --user list-units 'lensa-pf@fabricx-*' --no-legend` -> empty (units removed in S19).
 - Rollback: none after delete; restore from `fabricx-final-2026-11-<dd>` into a new namespace with the PVs set to Retain.
 - Sources: CURRENT.md sections 6, 14; LENSA.md section 6
 
