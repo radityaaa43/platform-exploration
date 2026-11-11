@@ -48,7 +48,7 @@ Lines: `L6 zeto BAL-P1`, `BAL-issue`, `BAL-award`, each PASS/FAIL/SKIP.
 | D1 | `kubectl -n rd-zeto-<p> get sts besu-validator -o jsonpath='{.status.readyReplicas}'` for the 4 parties (cluster 2 named read for bank-c); validator address list from the genesis `extraData` or `qbft_getValidatorsByBlockNumber` through a port-forward `[unverified: the API may be off on validators]` | 1 Ready each; BEFORE S5b: 8 distinct validators (old 4 + new 4), quorum 6; AFTER S5b: 4 distinct (the new ones), the old 4 gone | fewer than expected for the phase, or a duplicate |
 | D2 | `lensa.env` has per-party gateway URLs and no `KUBECONFIG`/kubectl entry (names only); in `GET /api/receipt?...&party=<P>` the submitter of a tx is that party's own Paladin identity | per party | one party's tx signed by another's key |
 | D3 | `kubectl -n rd-zeto-<p> get secret -o name` (names only): `besu-nodekey` and the Paladin key Secret in each namespace; public identities pairwise distinct | distinct x4 | any equal |
-| D4 | `can-i get secrets` across all 12 ordered pairs of `party-admin` = `no`; `kubectl --kubeconfig <Lensa host file> auth can-i '*' '*' --all-namespaces` = `no` or the file absent (after S20) | all `no` | any `yes` |
+| D4 | a REAL `get secret` with each party's own credential across all 12 ordered pairs = `Forbidden` (`L6-COMMON.md` gate item 9; `can-i` is information only); `kubectl --kubeconfig <Lensa host file> auth can-i '*' '*' --all-namespaces` = `no` or the file absent (after S20) | all `no` | any `yes` |
 | D5 | W4 (after S5b only; before it `NOT-RUN`): during the stop the other three validators' `eth_blockNumber` keeps rising; after restore all four within 2 | pass | blocks stall |
 
 ## 8. Four-of-four matrix (`L6-COMMON.md` section 7; run first)

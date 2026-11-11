@@ -43,7 +43,7 @@ The pod names and the stop method are named by `fabric` in each word request.
 | D1 | each org's consenter and committer pods Ready in its own namespace: `kubectl -n rd-fabricx-<p> get pods`; the genesis consenter set has 4 distinct certificates | 4 distinct, 1 per org | a consenter outside its org |
 | D2 | each org's FSC node runs in its own namespace with its own admin cert (S13): `core.yaml` view-API client cert path is that node's own (ConfigMap read, no Secret); Lensa reaches only gateways | per org | one shared admin cert |
 | D3 | no shared CA: `openssl x509 -noout -issuer -subject` on each org's public CA cert gives 4 distinct issuers (`fca-org1..4`); Secret names per namespace (names only) | 4 distinct | a shared issuer |
-| D4 | 12 ordered `can-i get secrets` = `no`; no cluster-admin on the Lensa host; `party-admin` Role has `pods/portforward` (create) and no `pods/exec` | as stated | any `yes` |
+| D4 | 12 ordered REAL `get secret` requests with the party's own credential = `Forbidden` (gate item 9; `can-i` is information only); no cluster-admin on the Lensa host; `party-admin` Role has `pods/portforward` (create) and no `pods/exec` | as stated | any `yes` |
 | D-tail | W2: a bank down does not stop the others (R2a) | pass | stall |
 
 ## 8. Four-of-four matrix (`L6-COMMON.md` section 7; run first)
