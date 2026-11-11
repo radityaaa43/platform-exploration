@@ -117,6 +117,7 @@ Key fact for the order: any change of an Arma party address or any new CA/MSP me
 - Sources: orderer@dd296e3:config/party_shared_config.go:11-68, docs/architecture.md:148-153,187; fabric-x multiorg/cfgupdate/main.go:132; CURRENT.md section 8
 
 ### S11: Arma party per org (cluster 1: parties 1-3)
+- ROLLOUT NOTE (2026-11-11 ~23:00 CST host clock, from the bi re-apply): a StatefulSet RollingUpdate never replaces a pod that has not become Ready, so a spec fix does not reach a crash-looping pod (currentRevision != updateRevision); the fix step is: apply the corrected spec, then delete the stuck pods by exact name on the orchestrator's word (the controller recreates them at updateRevision; PVCs untouched). First-apply render bugs found and fixed in rd-fabric-x #26 c2f9ad9: consenter CLI command is `consensus` (arma.go:30-58); the node local MSP needs the org's public admin cert mounted at /config/msp/admincerts/ (mspimplsetup.go:211); an offline smoke (multiorg/arma/smoke.py) now runs the pinned arma binaries on the rendered layout before any apply.
 - DELTA: 3 -> AFTER row: "One party (router, batcher, consenter, assembler) per org"
 - Owner: fabric  Size: L
 - Prerequisites: S10; free disk-attach slot read per node (`kubectl describe node | grep -c attached` or the CURRENT section 6 method) before apply, otherwise a node pool change = spend, user-only
