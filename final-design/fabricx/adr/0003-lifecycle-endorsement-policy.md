@@ -1,13 +1,13 @@
 # 0003. LifecycleEndorsement policy: 4-of-4 or MAJORITY
 Date: 2026-11-11
-Status: proposed
+Status: accepted (2026-11-12 ~00:05 CST, user-delegated via the analyst)
 Deciders: user
 
 ## Context
 Namespace and config lifecycle uses a channel-level ImplicitMeta policy. Ours is 4-of-4 (`SignedByNOutOfGivenRole(len(allMSPIDs), MEMBER, ...)`, fabric-x@713fd0c:multiorg/cfgupdate/main.go:123); the upstream sample uses `MAJORITY Endorsement` (orderer@dd296e3:testutil/fabric/sampleconfig/configtx.yaml:227-229; committer@08a469d:docs/namespace-policy.md:283-289). With 4-of-4 one org down blocks lifecycle changes (not transfers). `/Channel/Application/Admins` needs 3 of 4 (main.go:204-209). Each org will hold its own admin key (DELTA 6); channel changes need a majority of org admins, checked offline by `check-genesis` (CURRENT.md section 8). Whether org-level `mod_policy` per org works in Fabric-X is UNVERIFIED (ARCHITECTURE 2.1). The policy is written into the new genesis (PLAN S8, S10); changing it later needs a config update, and the official route is re-genesis.
 
 ## Decision
-Left to the user.
+MAJORITY (3-of-4) LifecycleEndorsement, ALIGNED with the AFTER. `multiorg/cfgupdate/main.go:123` = majority of the 4 org admins. Residual: the 3 Jakarta parties can pass a lifecycle change without bank C; it stays visible on the ledger as a detective control.
 
 ## Alternatives Considered
 - Keep 4-of-4. Pros: every org must agree to add or change a namespace; strongest per-org veto; matches today's live genesis. Cons: one org offline blocks lifecycle (a new token namespace), liveness lower than the transfer path (3-of-4).

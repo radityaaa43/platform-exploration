@@ -64,6 +64,7 @@ Key fact for the order: any change of an Arma party address or any new CA/MSP me
 - Sources: CURRENT.md section 7, 10; opa/DESIGN.md:148-150
 
 ### S6: Scratch channel: Idemix MSP + known_certs
+- DECIDED (2026-11-12 ~00:05 CST, user-delegated decision via the analyst (pins committer v1.0.4 08a469d, Panurus v0.24.0 5f3c49e)): "S6 inline", the scratch channel is NOT run and NOT waived. (a) The S11 genesis carries ONE shared channel Idemix org (`IdemixOrgMSP`, upstream shape) plus each org's endorser certs in `known_certs` (from the B3-SAN final identities); NEVER one Idemix MSP per bank (the creator MSP id would reveal the bank: R1 regression). (b) Offline before bring-up: decode the genesis and assert Idemix MSP + known_certs + MAJORITY; run `cfgupdate check-genesis`. (c) First action after bring-up, before ANY issuance, migration or Lensa traffic: one transfer with no ids/anon and no FSC full-certificate patch. (d) Outcomes: pass = drop ids/anon + the patch (DELTA 5 done); transfer fails but the channel runs = keep ids/anon + patch, deviation recorded with the error quoted; channel will not start = pre-data re-genesis without Idemix on the orchestrator's word (new empty PVCs only). Idemix issuer lives in ns rd-fabricx-bi; the issuer can sign as any creator (inferred); a known_certs rotation has no proven update path.
 - DELTA: 5 -> AFTER row: "Channel config gains an Idemix MSP ... drops `ids/anon`" (UNVERIFIED live)
 - Owner: fabric  Size: M
 - Prerequisites: S1, S2; scratch namespace `rd-fabricx-scratch` on cluster 1 (needs orderer + committer + FSC pods)
@@ -84,6 +85,7 @@ Key fact for the order: any change of an Arma party address or any new CA/MSP me
 - Sources: ARCHITECTURE DELTA 13; panurus-itest/README.md:113-141
 
 ### S8: Admin keys per org and lifecycle policy
+- DECIDED (2026-11-12 ~00:05 CST, user-delegated decision via the analyst (pins committer v1.0.4 08a469d, Panurus v0.24.0 5f3c49e)): ADR 0003 = MAJORITY (3-of-4), accepted; BLOCKED flag lifted. Per-org admin identity `admin-<N>` (cert into the public tree `msp/admincerts/`, key as Secret `orderer-admin-<N>-secret`) and the majority admin keys transiently in /dev/shm for `check-genesis` are custody steps: text to the orchestrator before each write. The real S10 genesis (12cb53bc…, membership-only, never distributed) is superseded by ONE complete rebuild carrying S8 admins + MAJORITY + S6-inline Idemix/known_certs; new heads, new sha.
 - DELTA: 6 -> AFTER row: "Each org holds its own admin key; channel changes need a MAJORITY of org admins"
 - Owner: fabric  Size: M
 - Prerequisites: ADR 0003 (user)
