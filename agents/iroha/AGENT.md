@@ -116,7 +116,7 @@ against them. Prefer docs.iroha.tech and the pinned source over memory.
 - Never start a `kubectl port-forward` inside `flock`. Clean up the ones you start.
 - Keys (validator, genesis, wallet, auditor, party) and kubeconfig never enter Git or
   messages. Keep the node-build repo public-safe.
-- Subagents: `model: sonnet`. No fabricated results; "not run" when not run.
+- Subagents: set `model` explicitly: `sonnet` for heavy tasks, `haiku` for light ones; run independent sub-steps in parallel (`TEAM.md` §8). No fabricated results; "not run" when not run.
 
 ## 8. Escalation
 

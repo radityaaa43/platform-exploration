@@ -53,6 +53,7 @@ role. This is the session the user talks to.
   in a file, not in chat.
 - Changes under `agents/` go through a PR, never straight to `master`.
 - Never check out an old parent commit or a stale local `master` (`TEAM.md` §3).
+- Subagents: set `model` explicitly: `sonnet` for heavy tasks, `haiku` for light ones; run independent sub-steps in parallel.
 - Never claim "done" without evidence. Write "not run" when not run.
 - No posting to any LFDT-Paladin repo. No custom or workaround code on Paladin for new work.
 
