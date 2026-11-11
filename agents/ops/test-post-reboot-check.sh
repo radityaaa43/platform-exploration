@@ -51,6 +51,10 @@ check platform-not-ready 1 '^FAIL health.*noto' FAKE_INACTIVE= FAKE_DOWN_PORTS=
 echo "$good" > "$t/www/api/health"
 echo '{"items":[{"metadata":{"name":"bad-0"},"status":{"phase":"Running","conditions":[{"type":"Ready","status":"False"}]}}]}' > "$t/pods/ns1.json"
 check pod-notready 1 '^FAIL pods ns1.*bad-0' FAKE_INACTIVE= FAKE_DOWN_PORTS=
+echo '{"items":[{"metadata":{"name":"old-job-x","ownerReferences":[{"kind":"Job"}]},"status":{"phase":"Failed"}},{"metadata":{"name":"ok-0"},"status":{"phase":"Running","conditions":[{"type":"Ready","status":"True"}]}}]}' > "$t/pods/ns1.json"
+check failed-job-pod-ignored 0 '^PASS pods ns1' FAKE_INACTIVE= FAKE_DOWN_PORTS=
+echo '{"items":[{"metadata":{"name":"dead-0","ownerReferences":[{"kind":"ReplicaSet"}]},"status":{"phase":"Failed"}}]}' > "$t/pods/ns1.json"
+check failed-nonjob-pod 1 '^FAIL pods ns1.*dead-0' FAKE_INACTIVE= FAKE_DOWN_PORTS=
 rm "$t/pods/ns1.json"
 check kubectl-error 1 '^FAIL pods ns1' FAKE_INACTIVE= FAKE_DOWN_PORTS=
 exit $fail

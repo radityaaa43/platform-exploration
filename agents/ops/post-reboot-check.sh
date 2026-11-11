@@ -41,7 +41,7 @@ print("not ready: " + " ".join(bad) if bad else "all ready: " + " ".join(sys.arg
 P
 ) && res PASS health "$out" || res FAIL health "$out"
 
-# 4. no pod NotReady (Succeeded pods are skipped)
+# 4. no pod NotReady (skipped: Succeeded pods and Failed pods of a finished Job)
 for ns in $NAMESPACES; do
   out=$(kubectl get pods -n "$ns" -o json 2>&1 | python3 -I -c '
 import json, sys
@@ -49,7 +49,9 @@ try:
     items = json.load(sys.stdin)["items"]
 except Exception:
     print("kubectl error"); sys.exit(1)
-bad = [i["metadata"]["name"] for i in items if i["status"].get("phase") != "Succeeded"
+done = lambda i: i["status"].get("phase") == "Succeeded" or (i["status"].get("phase") == "Failed"
+       and any(o.get("kind") == "Job" for o in i["metadata"].get("ownerReferences", [])))
+bad = [i["metadata"]["name"] for i in items if not done(i)
        and not any(c["type"] == "Ready" and c["status"] == "True" for c in i["status"].get("conditions", []))]
 print("NotReady: " + " ".join(bad) if bad else str(len(items)) + " pods ok"); sys.exit(1 if bad else 0)
 ') && res PASS "pods $ns" "$out" || res FAIL "pods $ns" "$out"
