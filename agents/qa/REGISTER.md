@@ -31,6 +31,11 @@ R14 interim terms (analyst via lead 2026-11-12), each a read-only check qa quote
 4. The DSN template URL-encodes the password or uses hex-only characters, with a render test on `+`, `/` and `@` (the S21 attempt-2 failure: a password with `+//` broke the DSN URL): qa reads the test name and its PASS output from the owner.
 5. The upstream issue is drafted by the analyst; posting is PARKED (user-only). qa reports R14 as open (accepted upstream residual) in every Zeto/Noto/Pente PASS.
 
+R15 terms (analyst via lead 2026-11-12): R15 is informational, not a principle break. Three terms, each quoted by its owner and read by qa:
+1. Content proof: no `client.toml`, seed, note key, genesis private material, kubeconfig or internal endpoint/ACL id in the 2 public images: a file-listing grep and a PEM scan of each image, quoted by `iroha`.
+2. No new public packages: CI asserts package visibility before the first deploy of any digest.
+3. Before the user's flip to private: all `rd-iroha3-*` pod specs carry the `ghcr-pull` pull secret, and a same-spec uncached pull test runs in all four namespaces (x4); the flip is made only after that, then a 4/4 Running re-read (`L6-COMMON.md` section 7) is quoted.
+
 Proof lines `qa` can quote read-only (names and modes only; no Secret value, no key content is ever read):
 - R1: `ls -l ~/.opa-keys ~/.opa-sink-tokens ~/.opa-mtls-party` (listing and modes) and `grep -nE "KUBECONFIG|keyFile|deployerKey" lensa.env` (names only); closes when the directories are absent and the S22 record (names, date, no values) is quoted.
 - R2, R10: the destruction record is a written line by the owner (names, date); qa quotes it and re-lists the path: absent.
