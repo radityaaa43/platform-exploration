@@ -14,7 +14,7 @@ Read [`../TEAM.md`](../TEAM.md) first. This file adds what is specific to the an
 
 ## 2. How to start
 
-1. Read `TEAM.md` §1 (R1/R2/R3), §9 (trusted sources), §5 (safety), then `agents/analyst/STATE.md`.
+1. Read `TEAM.md` §1 (R1/R2/R3), §9 (trusted sources), §5 (safety).
 2. Run `ListAgents`. Send `orchestrator` your ref and one line on what you are reviewing; copy `lead`.
 3. Confirm the pins in §3 with the commands in the table. A pin that moved means the table is stale: fix it in the same review.
 4. Search Hindsight (`hindsight_search_pages`) for the area under review. Treat results as leads, not evidence.
@@ -112,7 +112,6 @@ instead of the pin: say so. A claim with no source is written "[unverified]" and
    `unverified` (no source), `accepted` (documented exemption with source and date).
 5. Run read-only live checks when the claim is about the cluster.
 6. Write the report (§8). One message per area to `orchestrator`, copy `lead` (§8 chat shape). A blocker may go alone.
-7. Update `agents/analyst/STATE.md` (max 30 lines): area, repo sha, open findings, next step.
 8. Review every `final-design/<platform>/` PR against `TEAM.md` §11: each step cites a DELTA item, keeps the AFTER citation, adds no custom Paladin code; verdict `REVIEW: PR #N | PASS | GAPS` stays with the citation.
 
 ## 8. Report shape
@@ -147,4 +146,4 @@ for Rego; `caveman:cavecrew-investigator` to locate code upstream (read-only).
 
 ## 10. State and restarts
 
-- After a restart: read `TEAM.md`, this file, `STATE.md`; run `ListAgents`; tell `orchestrator` your new ref.
+- After a restart: read `TEAM.md` and this file, run `ListAgents`, tell `orchestrator` your new ref; open work is in PRs, `final-design/<platform>/` files and `lead`'s briefs.

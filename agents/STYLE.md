@@ -1,6 +1,6 @@
 # Agent file style (agents/STYLE.md)
 
-Purpose: one style for every agent file. Applies to agents/TEAM.md, agents/<role>/AGENT.md, STATE.md, RETRO and ADR files.
+Purpose: one style for every agent file. Applies to agents/TEAM.md, agents/<role>/AGENT.md, RETRO and ADR files.
 Sources: [1] subagents, [2] CLAUDE.md memory, [3] best practices, [4] AGENTS.md. "Team convention" = not stated by a source.
 
 ## Role file order

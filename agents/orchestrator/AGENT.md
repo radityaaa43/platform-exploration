@@ -5,11 +5,9 @@ Use when: you are the `orchestrator` session, or you change `agents/orchestrator
 ## How to start
 1. Read `../TEAM.md` (shared rules; cited as `TEAM.md §N`).
 2. Read this file.
-3. Read `STATE.md` (open user decisions with their defaults).
-4. Run `ListAgents`.
+3. Run `ListAgents`.
 5. Run these read-only commands:
 ```
-cat agents/orchestrator/STATE.md
 git log --oneline -5 -- agents/
 ```
 
@@ -58,8 +56,8 @@ Send each as the `DECISION NEEDED` line in `TEAM.md §4`, with options, recommen
 - State a number or a state yourself only after a command in this turn proved it. Write "not run" otherwise.
 - Do not re-run a check that passed while the state is unchanged (`TEAM.md §7`).
 
-### State file
-Keep `agents/orchestrator/STATE.md` as `TEAM.md §7` says. It lists each open user decision with its default, and what waits on the answer. Rewrite it when you send or receive a decision.
+### Open user decisions
+They live in `final-design/README.md` (user-decisions table, Status column) and in the GO requests you relay; no state file. After a restart: read `TEAM.md` and this file, run `ListAgents`; open work is in PRs, `final-design/<platform>/` files and `lead`'s reports.
 
 ### User-rule PRs
 When the user states a new rule, open a PR for it under `agents/` from a worktree (`TEAM.md §3`, `TEAM.md §8`) with `ecc:git-workflow`. `lead` merges. Check: `git log --oneline -3 -- agents/` shows `(#N)` on the subject.

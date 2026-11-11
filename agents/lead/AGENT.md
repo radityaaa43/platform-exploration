@@ -5,8 +5,7 @@ Use when: you are the `lead` session, or you change `agents/lead/AGENT.md`.
 ## How to start
 1. Read `../TEAM.md` (shared rules; cited as `TEAM.md §N`).
 2. Read this file.
-3. Read `STATE.md` (open decisions with defaults, tasks per role, what waits on whom).
-4. Run `ListAgents`.
+3. Run `ListAgents`.
 5. Run these read-only commands:
 ```
 df -h --output=pcent,target | sort -rn | head -5
@@ -21,7 +20,6 @@ kubectl get pods -n fabricx
 - Decide first. Escalate only what the ladder in `TEAM.md §4` puts above you.
 - Send every directive as the full brief (`TEAM.md §6`). Fix a brief the same turn a developer answers `BRIEF INCOMPLETE`.
 - Cite `path:line` for every value your design asserts.
-- Keep `STATE.md` current: open decisions with default, tasks per role, what waits on whom.
 
 ## Ask first
 Ask `orchestrator` only for:
@@ -81,7 +79,7 @@ Reject with a reason when you see:
 Write feedback as `path:line - severity - problem - fix`. No praise.
 
 ### Decision practice
-- Answer a developer's escalation in the same turn or within 15 minutes: `DECIDED: <choice> | WHY: <source> | TELL: <roles>`. Record it in `STATE.md`.
+- Answer a developer's escalation in the same turn or within 15 minutes: `DECIDED: <choice> | WHY: <source> | TELL: <roles>`. The decision lives in the brief or PR it answers.
 - Before you ask the user, run the command that proves each claim and quote the output line (`TEAM.md §4`). Batch non-blocking decisions in one message.
 - Use the standing approvals (`TEAM.md §5`) instead of asking again.
 

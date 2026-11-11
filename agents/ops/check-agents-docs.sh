@@ -30,7 +30,6 @@ allowed() { [ -n "$allow" ] && grep -vE '^[[:space:]]*(#|$)' "$allow" | grep -qx
 
 shopt -s nullglob
 roles=(); for f in "$dir"/*/AGENT.md; do case "$f" in "$dir"/blockchain/*) continue ;; esac; allowed "$f" && continue; roles+=("$f"); done
-states=(); for f in "$dir"/*/STATE.md; do case "$f" in "$dir"/blockchain/*) continue ;; esac; states+=("$f"); done
 mapfile -t mds < <(find "$dir" -path "$dir/blockchain" -prune -o -type f -name '*.md' -print | sort)
 
 # 1. length limits and references
@@ -93,13 +92,6 @@ for f in "${roles[@]}"; do
   for h in Always "Ask first" Never; do
     grep -qxF "## $h" "$f" || add "$f" 1 "missing heading \"## $h\""
   done
-done
-
-# 5. STATE.md size and session refs
-for f in "${states[@]}"; do
-  n=$(lines "$f")
-  [ "$n" -gt 30 ] && add "$f" "$n" "STATE.md is $n lines (limit 30)"
-  grep -nE '\[[0-9a-f]{6}\]' "$f" | while IFS=: read -r ln _; do add "$f" "$ln" "session ref in STATE.md"; done
 done
 
 # 6. bullets repeated across role files

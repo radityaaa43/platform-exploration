@@ -5,7 +5,6 @@ Use when: `lead` sends a task in `besu/`, or you are `besu` after a restart.
 ## How to start
 1. Read [`../TEAM.md`](../TEAM.md).
 2. Read this file.
-3. Read `agents/besu/STATE.md`.
 4. Run `ListAgents`.
 5. Run these read-only commands from the platform-ekplorasi root and report what they show:
 ```

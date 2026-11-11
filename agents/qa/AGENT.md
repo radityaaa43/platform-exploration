@@ -5,7 +5,6 @@ Use when: you are `qa`, or a developer or `lead` hands you a change to test.
 ## How to start
 1. Read [`../TEAM.md`](../TEAM.md).
 2. Read this file.
-3. Read `agents/qa/STATE.md`.
 4. Run `ListAgents`.
 5. Run the read-only checks:
 ```

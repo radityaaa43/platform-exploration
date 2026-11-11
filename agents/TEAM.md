@@ -2,7 +2,7 @@
 
 ## 0. Preamble
 
-Shared rules for every agent on the team. Read this file, then your role file `agents/<role>/AGENT.md`, then your `STATE.md`.
+Shared rules for every agent on the team. Read this file, then your role file `agents/<role>/AGENT.md`.
 - If a role file and this file clash, this file wins. A role file may be stricter than this file, never looser.
 - Role files cite sections as `TEAM.md §N`. Style rules for every agent file: [STYLE.md](STYLE.md).
 - This file holds shared rules only. Role duties live in role files. Check: `wc -l agents/TEAM.md` prints 270 or less.
@@ -83,7 +83,7 @@ Chain of command: developers and `qa` report to `lead`; `lead` to `orchestrator`
 | User | The user-only list below. |
 
 - A developer escalates to `lead` only. Never to `orchestrator` or the user.
-- `lead` answers in the same turn or within 15 minutes: `DECIDED: <choice> | WHY: <source> | TELL: <roles>`. `lead` records it in `agents/lead/STATE.md`.
+- `lead` answers in the same turn or within 15 minutes: `DECIDED: <choice> | WHY: <source> | TELL: <roles>`. The decision lives in the brief or PR it answers.
 - Anything a lower level can decide goes back down: "that is `lead`'s decision".
 - Reviewers (`analyst`, `qa`, second readers) never push to the author's branch: comment on the PR or open a follow-up PR. Only the author pushes.
 
@@ -185,8 +185,7 @@ Review:
 - Stop at two failed attempts or 15 minutes on one problem, whichever comes first. Report the hypothesis you tested. No third try without a decision.
 - Prove each claim with a command and quote the output line. Write "not run" for anything not run. Quote the failing line when a test fails.
 - Do not repeat verified work. `orchestrator` checks one claim per relayed report with a command. Nobody re-runs a passed check when the state is unchanged.
-- State file `agents/<role>/STATE.md`: at most 30 lines, local and git-ignored. Rewrite it at the end of every task, when blocked and when going idle. It holds the current task, facts with the command that proved them, open items and the next step. It holds no session refs. Check: `wc -l agents/<role>/STATE.md`; `git check-ignore agents/<role>/STATE.md`.
-- After a restart: read this file, your role file and your `STATE.md`; run `ListAgents`; send `lead` your new ref and one line on where you stopped.
+- After a restart: read `TEAM.md` and your role file, run `ListAgents`, tell `lead` your new ref; open work is in PRs, `final-design/<platform>/` files and `lead`'s briefs.
 - Waiting on a gate (approval, rollout, review): start the next independent task and say so in the status report. Idle for 10 minutes: tell `lead` "idle". Then, without waiting, do one of: (a) a read-only `REVIEW` of another developer's open diff, findings to `lead` as `path:line`; (b) tests or docs in your own area; (c) for `qa` support, RED tests for the next task. Never edit another agent's area.
 - `lead` keeps idle roles busy first. Single-developer areas (Zeto, Noto, Stealth) get a second reader before anything merges.
 - Messages are plain and short: the ask first, then only what the receiver needs. No recap of what the receiver knows.

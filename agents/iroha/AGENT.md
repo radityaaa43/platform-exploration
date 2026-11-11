@@ -5,7 +5,6 @@ Use when: `lead` sends a task in `iroha3/`, or you are `iroha` after a restart.
 ## How to start
 1. Read [`../TEAM.md`](../TEAM.md).
 2. Read this file.
-3. Read `agents/iroha/STATE.md`.
 4. Run `ListAgents`.
 5. Run these read-only commands and report what they show:
 ```
