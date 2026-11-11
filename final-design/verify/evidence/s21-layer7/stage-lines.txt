@@ -1,0 +1,37 @@
+S21 layer 7 (attempt 3), qa proof lines. Times UTC 2026-11-11 (CST = +8 h, so 2026-11-12). Credentials named per line.
+
+STAGE 1 LOCK (besu lock-check.ts, rd-besu main cedec5a; credential: bank A Lensa client cert; transport: Lensa forward (cluster-admin, R1) 127.0.0.1:31648 -> bank-gw-2)
+ attempt 1, 22:48:47Z (06:48 CST), script before the fix: createLock ok lockId=0x08295c88...dbde; balance 5009990995 -> 5009990994; delegate ok; cancelLock FAILED
+   `L6 zeto LOCK: FAIL cancelLock: receipt failed: PD012616: Domain reverted transaction on assemble: PD011615: Input state 0 [0x<redacted>] not found`
+   residue: 1 RD unit of bank A locked (prepare-only tx 81daa2e9 reserves the coin in node2's coordinator memory); cause: lock-check.ts prepareSpend before cancelLock on the same lock (rd-besu #84 fix).
+ attempt 0 (before the publish), 21:18Z (05:18 CST): `L6 zeto LOCK: FAIL createLock: Request failed with status code 403`: OPA `gw/allow` false for ptx_sendTransaction createLock (no Kebijakan document: clock.token_open closed).
+ attempt 2, 23:00:32Z (07:00 CST), script at cedec5a (no prepareSpend; LOCK LEFT OPEN guard):
+   23:00:36.482 lock check owner=bankA@node2 to=bankB@node3 token=0x0b91f511...6f amount=1
+   23:00:36.695 before balance=5009990994
+   23:00:41.632 createLock ok lockId=0xef6e3c8748b2afb987cf09a41df0dc9d85d188c99a163479520f44e857f8a313
+   23:00:41.798 after createLock balance=5009990993
+   23:00:43.371 delegateLock ok
+   23:00:43.516 after delegateLock balance=5009990993
+   23:00:45.837 cancelLock ok
+   23:00:45.987 after cancelLock balance=5009990994
+   L6 zeto LOCK: PASS   (net zero vs the 5009990994 baseline; the old residue lock untouched)
+
+STAGE 2 OUTSIDER-PRE (old A->B dvp 0x5144e6c86b7bc4a8950e241a23f48b0682654b5b72305bb4d54eb2a0dc8b6dfa, 2026-11-11T05:24:47Z; credential: none, Lensa GET API 127.0.0.1:8790; transport: direct HTTP)
+ first run 23:00:59Z: R1-pre-A PASS, R1-pre-B PASS, R1-pre-BI PASS, R1-pre-C FAIL (`OUTSIDER READS A NODE PART`), R1-pre-C-history FAIL (`LISTED or unreadable`): qa criterion bug (see the record).
+ corrected run 23:02:12Z: A PASS (sender, clear, amount 1, Transfer row True); B PASS (receiver, clear, amount 1, Transfer row True); BI PASS (regulator, reported, amount 1: Zeto R1 LIMIT); C PASS negative control (outsider, sealed, amount None, counterparty None, Transfer row False).
+
+STAGE 3 FLOWS (credential: none, Lensa UI via Playwright, Lensa signs with its host party material, R1; transport: Lensa -> party gateways, flock /tmp/lensa-paladin.lock)
+ zeto 23:04:45Z-23:05:50Z: Playwright report (written before the harness kill) = 6 total, 6 expected, 0 unexpected, 0 skipped: rd-issue 4.3 s, rd-transfer 6.6 s, dfabi-issue 3.9 s, dfabi-transfer 5.8 s, dvp 18.7 s, award 21.8 s; BI-DELTA annotations: first five RD PASS 0 / DFABI PASS 0; award RD PASS +1000000 / DFABI PASS -1.
+   chain cross-check (Lensa balances vs 22:50Z reads): A RD +999000 DFABI -3, B RD -999000 DFABI +3, BI RD +1000000 DFABI -1, C RD -999000 DFABI +4.
+ noto run 1 (23:13:42Z): expected 1, unexpected 1, skipped 4: rd-issue PASS (4.8 s); rd-transfer FAIL (40.9 s) on the page-error assertion: `502 http://127.0.0.1:8790/api/network?model=noto` (fe: 5 s route deadline vs serial validator polls, transient, not a tx failure); money moved: C RD +1000, A RD -1000, B RD +1000.
+ noto run 2, the 4 remaining flows (23:18:22Z): expected 4, unexpected 0, skipped 0, flaky 0 (dfabi-issue 7.9 s, dfabi-transfer 5.3 s, dvp 1.1 min, award 20.7 s; `4 passed (1.7m)`); BI-DELTA 8/8 PASS; whole-run deltas as quoted before the run: BI RD +1000000 DFABI -4, A RD +1000000 DFABI -3, B RD -1000000 DFABI +3, C RD -1000000 DFABI +4 (8/8 exact).
+
+STAGE 4 OUTSIDER-POST (fresh zeto dvp 0x3f45a19a0ee86376a8b8f633f6c2c8d4fda3fa80b7bfc3721749d7a19487c238, 2026-11-11T23:05:25Z; credential: none, Lensa GET API; transport: direct HTTP), 23:09:25Z
+ A PASS (sender, clear, amount 1, Transfer row True); B PASS (receiver, clear, amount 1, Transfer row True); BI PASS (regulator, reported, amount 1); C PASS negative control (outsider, sealed, amount None, counterparty None, Transfer row False).
+ fresh noto dvp 0x4fdaa0757b...: A clear, B clear, BI notarised (amount 1, rd 1000000), C outsider sealed (amount None).
+ (e) report in BI's new group: BI shows `regulator reported` for the three fresh zeto A->B txs (rd-transfer 0x9d39af1c10d9663251250fe517f8b1e7e680aa79034cca8d61c69c4a048db479, dfabi-transfer, dvp).
+ checks 2 and 3: FAIL-pending-analysis (besu's node4 probe read found that C holds a domainReceipt and data states for the old tx; with the analyst).
+
+SHA-256 of the large Playwright JSON reports kept on the host (scratchpad, not copied here, 1.1 and 2.6 MB):
+ noto-report.json  80e763217a230ecf076a4698c6d9a3e5839b13e4ab6d302fa502788fd0abd885
+ noto4-report.json 524271b18f0003164968ef92e2d95425206b2ca2934d770f482d3087c17a05c9

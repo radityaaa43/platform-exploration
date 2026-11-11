@@ -51,3 +51,7 @@ Status: re-checked against fd-noto-pente ce5c513 (analyst fix pass). Z-* rows po
 - Notary rotation, multiple notaries per token: not found upstream (F:237).
 - Remote/HSM signer: Paladin plugin code, excluded by "no custom Paladin" (S4).
 - Deletes (S15): user-only; qa proves the state after, never acts.
+
+
+## Layer-7 record (S21 attempt 3)
+The Noto half of the S21 layer-7 proof (6 flows with BI-DELTA cells, the fresh noto dvp views: A clear, B clear, BI notarised, C outsider sealed) is recorded with the Zeto half in `final-design/zeto/VERIFY.md` section "Layer-7 record, S21 attempt 3", evidence in `final-design/verify/evidence/s21-layer7/`. The noto rd-transfer 502 event and the corrected outsider criterion are described there.
