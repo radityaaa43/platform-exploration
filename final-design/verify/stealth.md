@@ -41,7 +41,7 @@ Before: signer Ready, `GET /api/network?model=stealth`. During W2: `POST /api/tx
 | D1 | `kubectl -n rd-stealth-<p> get cm besu-static-nodes,besu-rpc-config -o yaml`: static-nodes has exactly ONE enode = the own party's validator pod `IP:30303`; `sync-min-peers=1`; `discovery-enabled=false` | x4 | 3 enodes, or another party's |
 | D2 | the party's signer and scanner run in its own namespace (BI in `rd-stealth-bi`); Lensa submits through that party's `st-gw-<N>` with a per-party mTLS cert; no key fields in `state/stealth.json` | per party | shared `deployerKey` or key fields in the state file |
 | D3 | `besu-rpc-nodekey` and `stealth-rpc-jwt` per namespace (names; keys `private.pem`, `public.pem`); the pod mounts only `public.pem`; `sha256` of each party's `public.pem` (a public file) pairwise distinct | distinct x4 | equal, or `private.pem` mounted |
-| D4 | 12 ordered `can-i get secrets` = `no`; `create pods --subresource=exec` = `no` except the named `pods/vault-0` rule; no cluster-admin on the Lensa host | as stated | any `yes` |
+| D4 | 12 ordered REAL `get secret` requests with the party's own credential = `Forbidden` (gate item 9; `can-i` is information only); `create pods --subresource=exec` = `no` except the named `pods/vault-0` rule; no cluster-admin on the Lensa host | as stated | any `yes` |
 | D5 | `deployerKey` retired (S15): the old holder's roles removed (user-only; qa reads the state after) | removed | role remains |
 | D-tail | W4: others unaffected | pass | other parties fail |
 
@@ -68,8 +68,8 @@ PASS to start: the last Job succeeded, the summary line is `compare: 4/4 OK` and
 ## 11. Rerun readiness: pull test (`L6-COMMON.md` gate item 6) and S7-S12, S17 proofs
 Pull-test image list per cluster (qa lists, the owner pulls under the GO, qa quotes `PULLED <digest>` per line; cluster 2 on its own): the only image the PLAN names is `hyperledger/besu:26.8.1` (S4, a tag, no digest). The `stealth-signer` image (S8, image build only), the scanner (same pod), the BI signer/scanner (S10), the compare-job image (S11) and the Envoy/OPA of `st-gw` (S17) are NOT STATED. A "not stated" reference is a P5 finding to fix before the apply, not a PASS.
 Step notes (from PLAN, 2026-11-12):
-- S7: plain Secret `stealth-keys` per namespace (no Vault); read `get secret stealth-keys -o name` per ns, names and sizes only; `can-i get secrets` as `party-admin` = `no`.
-- S9: also read `party-admin-token` (NotFound before, present after, name only) and `can-i get secrets` still `no`; holdings and meta-address equal in three places (signer, Lensa state, `ERC6538Registry`). No key rotation (cancelled): the keys are copies, R2 stays OPEN-PARKED.
+- S7: plain Secret `stealth-keys` per namespace (no Vault); read `get secret stealth-keys -o name` per ns, names and sizes only; a real denied `get secret` with the party's own credential = `Forbidden` (`can-i` is information only).
+- S9: also read `party-admin-token` (NotFound before, present after, name only) and a real denied `get secret` still `Forbidden`; holdings and meta-address equal in three places (signer, Lensa state, `ERC6538Registry`). No key rotation (cancelled): the keys are copies, R2 stays OPEN-PARKED.
 - S10 and S11 are UNBUILT (PLAN L125, L136): `ROLE=bi` and the BI key store `stealth-bi-keys` do not exist yet, so their rows are `NOT-RUN (precondition)`; W2 stays NOT-RUN until S10. The compare job's output is built in rd-besu #63 (4 per-party lines + summary, section 9); VERIFY.md S11 is aligned to it.
 - S12 (custodian + roles) is BLOCKED (custodian party, ADR 0004): read-only proof by `eth_call` only: `bond.owner()`, `controllers()`, `isMinter(new)`, `validator.isCertificateSigner(bond,new)`, `isAllowlisted(bond,new)`, `DvPFactory(new).custodian()`, `bond.isControllable()` = true.
 - The gateway + OPA of stealth is S17 (not S8-S12); cluster 2 gets one extra CLB `st-gw-1-ext`.

@@ -42,7 +42,7 @@ Any single peer down stops user txs; an auditor down means no Prepare (A:118-120
 | D1 | one peer Ready per namespace (`kubectl -n rd-iroha3-<p> get pods`); the roster has 4 distinct PeerIds, each derived from that peer's own BLS key (genesis epoch 0, `next_epoch_roster` none) | 4 distinct, 1 per party | a peer outside its namespace |
 | D2 | own submit: each bank's tx goes through its own namespace client and key; BI sponsor path (`cfg.sponsor("bi")`) is the recorded exception until S17 (ADR 0001): `PARTIAL` for full self-submit, not FAIL | per party; S17 PARTIAL noted | a bank key used by another party |
 | D3 | no shared key: Secret names per namespace (`bi-auditor-key` keys `bi-auditor.hybrid`, `bi-auditor.seed` only in `rd-iroha3-bi`, key names only); mint-finality keys are per-org triples; public identities pairwise distinct | distinct x4 | an equal identity |
-| D4 | 12 ordered `can-i get secrets` = `no`; Lensa host holds no cluster-admin | as stated | any `yes` |
+| D4 | 12 ordered REAL `get secret` requests with the party's own credential = `Forbidden` (gate item 9; `can-i` is information only); Lensa host holds no cluster-admin | as stated | any `yes` |
 | D5 | all four `p2p` Services: ACL annotations on (`status on`, `type white`, one `id` per cluster) and the netpol `100.64.0.0/10` element present and its own element; positive control (peer cluster egress connects) before negative | per `deviation-LB.py` | an ACL missing |
 
 ## 8. Four-of-four matrix (`L6-COMMON.md` section 7; run first)
