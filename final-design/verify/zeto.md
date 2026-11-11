@@ -14,7 +14,7 @@ Parties: `rd-zeto-bi`, `rd-zeto-bank-a`, `rd-zeto-bank-b` (cluster 1), `rd-zeto-
 | W1 | qa runs the 6 flows in one detached run under the flock: `POST /api/tx` for rd-issue, rd-transfer, dfabi-issue, dfabi-transfer, dvp, award (demo amounts, cap from the brief) | about 6 txs | none | `6 passed`; `BI-DELTA zeto <flow> ...: PASS` per cell | none possible (append-only); amounts are demo |
 | W2 | R2: `besu` stops the BI Paladin node in `rd-zeto-bi` (method: the S9-supported one, operator CR or sts scale; `besu` names it in the word request) | 300 s | `besu` reverses it the same way | `rd-transfer` A to B and `dvp` A to B settle; BI's report row is missing (LIMIT) | restore, node `up` in `/api/network?model=zeto`, one fresh tx |
 | W3 | R3 forced failure: `besu` makes one dvp leg fail (named in the word request: expired or underfunded leg) | one attempt | none | both balances unchanged | none |
-| W4 | D-tail: `besu` stops only `besu-validator-0` in `rd-zeto-bi` | 120 s | scale back to 1 | the three other validators keep sealing blocks (4 validators, 3 needed) | restore; block height equal within 2 on all four |
+| W4 | D-tail: `besu` stops only `besu-validator-0` in `rd-zeto-bi`. Run ONLY after S5b (old 4 validators voted out, QBFT set n=4). Before S5b the set is n=8 (old 4 + new 4), quorum 6, and the team rule is never two of bi/bank-a/bank-b down at once: restated for n=8 it is one new validator down, 7 of 8 sealing, quorum 6 still met; qa does not ask for it before S5b | 120 s | scale back to 1 | after S5b: the three other validators keep sealing (4 validators, 3 needed); before S5b: `NOT-RUN` | restore; block height equal within 2 on all validators |
 
 ## 2. R1 (zeto): LIMIT, partial by design
 - Check `R1`: tx `<T>` = the `rd-transfer` A to B of W1 (`event: result` `txHash`).
@@ -45,8 +45,8 @@ Lines: `L6 zeto BAL-P1`, `BAL-issue`, `BAL-award`, each PASS/FAIL/SKIP.
 ## 7. Decentralization per bank (read-only; (C) rows run before S21)
 | ID | Check | PASS | FAIL |
 |---|---|---|---|
-| D1 | `kubectl -n rd-zeto-<p> get sts besu-validator -o jsonpath='{.status.readyReplicas}'` for the 4 parties (cluster 2 named read for bank-c); validator address list from the genesis `extraData` or `qbft_getValidatorsByBlockNumber` through a port-forward `[unverified: the API may be off on validators]` | 1 Ready each; 4 distinct addresses | fewer than 4, or a duplicate |
+| D1 | `kubectl -n rd-zeto-<p> get sts besu-validator -o jsonpath='{.status.readyReplicas}'` for the 4 parties (cluster 2 named read for bank-c); validator address list from the genesis `extraData` or `qbft_getValidatorsByBlockNumber` through a port-forward `[unverified: the API may be off on validators]` | 1 Ready each; BEFORE S5b: 8 distinct validators (old 4 + new 4), quorum 6; AFTER S5b: 4 distinct (the new ones), the old 4 gone | fewer than expected for the phase, or a duplicate |
 | D2 | `lensa.env` has per-party gateway URLs and no `KUBECONFIG`/kubectl entry (names only); in `GET /api/receipt?...&party=<P>` the submitter of a tx is that party's own Paladin identity | per party | one party's tx signed by another's key |
 | D3 | `kubectl -n rd-zeto-<p> get secret -o name` (names only): `besu-nodekey` and the Paladin key Secret in each namespace; public identities pairwise distinct | distinct x4 | any equal |
 | D4 | `can-i get secrets` across all 12 ordered pairs of `party-admin` = `no`; `kubectl --kubeconfig <Lensa host file> auth can-i '*' '*' --all-namespaces` = `no` or the file absent (after S20) | all `no` | any `yes` |
-| D5 | W4: during the stop the other three validators' `eth_blockNumber` keeps rising; after restore all four within 2 | pass | blocks stall |
+| D5 | W4 (after S5b only; before it `NOT-RUN`): during the stop the other three validators' `eth_blockNumber` keeps rising; after restore all four within 2 | pass | blocks stall |
