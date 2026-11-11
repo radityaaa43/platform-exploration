@@ -16,5 +16,5 @@ Left to the user. PLAN.md step S5 stays BLOCKED(registry rootless) until one opt
 
 ## Consequences
 - Option A: S5 deploys the registry (CLUSTER-OP), all four nodes re-register, bank C's registration on cluster 2 needs no BI key. Noto/Pente factories and tokens are untouched.
-- Option B or C: bank registrations and cert renewals queue behind BI; the zeto plan's transport steps carry the same dependency.
-- Steps S5 and the registration part of Z-TRANSPORT stay BLOCKED until this is decided; S7 needs the registry to be usable.
+- Option B or C: bank registrations and cert renewals queue behind BI; the zeto plan's transport steps (zeto S10) and republish (zeto S11) carry the same dependency.
+- Steps S5 and the ownership part of zeto S11(b) stay BLOCKED until this is decided; S7 needs the registry to be usable.
