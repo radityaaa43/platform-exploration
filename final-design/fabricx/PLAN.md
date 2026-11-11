@@ -1,5 +1,5 @@
 # fabricx: plan CURRENT -> AFTER
-Skills used: superpowers:writing-plans, ecc:architecture-decision-records, ecc:kubernetes-patterns, superpowers:verification-before-completion (RED proofs), ecc:deployment-patterns (Lensa cutover/rollback). Not applicable: solidity-auditor, ecc:evm-token-decimals, web3-testing (no EVM; unit discipline applied in CONTRACTS.md). Drafter note: skills applied as checklists, not loaded as tool calls.
+Skills used (loaded by `lead` with the Skill tool before the review; the drafter applied them as checklists): superpowers:writing-plans, ecc:plan, ecc:architecture-decision-records, ecc:kubernetes-patterns, superpowers:verification-before-completion (RED proofs), ecc:deployment-patterns (Lensa cutover/rollback). Not applicable: solidity-auditor, ecc:evm-token-decimals, web3-testing (no EVM; unit discipline applied in CONTRACTS.md).
 Target: agents/analyst/design/ARCHITECTURE-fabricx.md (AFTER) + objectives (decentralization per bank: validator, self-submit, third-party; R1, R2, R3). Start: final-design/fabricx/CURRENT.md @ 2026-11-11 08:20 UTC.
 Namespaces: rd-fabricx-bi, rd-fabricx-bank-a, rd-fabricx-bank-b (cluster 1), rd-fabricx-bank-c (cluster 2, new only). Old: `fabricx` (+ host-side committer, `~/.fabricx-token`).
 Pins: repo cites are `fabric-x@713fd0c` (local HEAD read now; CURRENT read 7bef424, line numbers re-checked only where marked), `frontend@28c8bdb` (local HEAD; analyst pin aa6e09b), others as in ARCHITECTURE-fabricx.md header.
@@ -16,7 +16,7 @@ Key fact for the order: any change of an Arma party address or any new CA/MSP me
 ### S1: Per-org namespaces on cluster 1
 - DELTA: 2 -> AFTER row: "Own namespace per org ... own kubeconfig and RBAC; template from multiregion patterns"
 - Owner: fabric  Size: S
-- Prerequisites: user-provided per-org kubeconfigs [unverified: do not exist yet]; lead naming (rd-fabricx-*)
+- Prerequisites: cluster-1 admin kubeconfig (exists, operator host); lead naming (rd-fabricx-*). The per-org kubeconfigs are an output of this step (ServiceAccount token per namespace), not an input.
 - Flags: CLUSTER-OP
 - Does: create ns `rd-fabricx-bi`, `-bank-a`, `-bank-b`; label `pod-security.kubernetes.io/enforce=restricted`; NetworkPolicy `default-deny-ingress` + `allow-dns-egress` + `allow-same-namespace`; ServiceAccount + namespace-scoped Role/RoleBinding per org. Pattern source: multiregion `default-deny-all`, PSS restricted, identity Secrets (ARCHITECTURE 2.4); whether multiregion also denies egress: [unverified], so egress stays open until S13.
 - RED proof: `kubectl get ns rd-fabricx-bi -o jsonpath='{.metadata.labels}'` before: NotFound; after: contains `"pod-security.kubernetes.io/enforce":"restricted"`; qa probe pod from `rd-fabricx-bank-a` to a test Service in `rd-fabricx-bi` times out.
@@ -48,7 +48,7 @@ Key fact for the order: any change of an Arma party address or any new CA/MSP me
 - Owner: fe  Size: L
 - Prerequisites: none (runs against the old namespace; gateway ops exist today)
 - Flags: none
-- Does: remove `kubectl` Exec path (`frontend@28c8bdb:server/src/adapters/fabricx.ts:86-102`), psql reads (:189, :321, :436), pod status (:399) and `FABRICX_KUBECONFIG` (:486); replace with gateway ops `history`, `records`, `finality`, `balance` of each bank's `fx-gw-N`; keep :27-28 deadlines. `state/fabricx.json` loses `kubeconfig`, `namespace`. See DEVIATION REQUEST for the public-ledger lens.
+- Does: remove `kubectl` Exec path (`frontend@28c8bdb:server/src/adapters/fabricx.ts:86-102`), psql reads (:189, :321, :436), pod status (:399) and `FABRICX_KUBECONFIG` (:486); replace per-party reads with gateway ops `history`, `records`, `finality`, `balance` of each bank's `fx-gw-N`; replace the public-ledger lens (psql, :189) with a client of BI's committer query service (the AFTER row names it; `committer@08a469d:docs/query-service.md` [not opened, port/API unverified]; BI sees every row per R1, so the lens keeps its content); pod health (:399) becomes the gateway `usage` op or is dropped from the lens; keep :27-28 deadlines. `state/fabricx.json` loses `kubeconfig`, `namespace`. Lensa adapter code only; no Fabric-X, Panurus or Paladin change.
 - RED proof: `grep -nE "kubectl|psql|FABRICX_KUBECONFIG" server/src/adapters/fabricx.ts` before: hits; after: 0 hits; fe tests for fabricx adapter pass; qa `records` lens shows the R1 views of CURRENT section 11 unchanged.
 - Rollback: `git revert` PR, restart `lensa.service` (previous dist, deploy/update.sh rollback per LENSA.md 4.1).
 - Sources: LENSA.md sections 1.4-1.5, 4.1; ARCHITECTURE DELTA 1; opa/DESIGN.md:43-45 (allowed ops)
@@ -166,7 +166,7 @@ Key fact for the order: any change of an Arma party address or any new CA/MSP me
 ### S16: Gateway + OPA + bundles per org
 - DELTA: 9 -> AFTER row: "Own envoy + OPA + fxapi in the org's cluster; trusts only the org's client CA"
 - Owner: fabric  Size: M
-- Prerequisites: S13; besu-plan bundle-source step [id pending, shared bundle-server design]
+- Prerequisites: S13; zeto PLAN.md bundle-source step (per-org signed bundles; id filled by `lead` when the zeto plan merges)
 - Flags: CLUSTER-OP
 - Does: `fx-gw-<N>` (envoy `0.0.0.0:8443`, ext_authz 3 s `failure_mode_allow=False`, route 300 s) in each org namespace; per-org client CA Secret `fx-gw-<N>-mtls` (split from the single Lensa cert); OPA bundles `bundles.bi/bank.resource`, per-org signing key held by its owner (not Lensa host); netpol covers orderer/committer pods too.
 - RED proof: read-only qa: `op balance` through `fx-gw-2` with Lensa cert: 200; with a cert of bank B: 403; `{"op":"records"}` R1 views equal CURRENT section 11.
@@ -218,9 +218,9 @@ Key fact for the order: any change of an Arma party address or any new CA/MSP me
 - Owner: lead  Size: S
 - Prerequisites: S20, ADR 0002 (user)
 - Flags: BLOCKED(retire multiregion stack), user-only, CLUSTER-OP, destructive
-- Does: delete ns `fabricx-bi`, `fabricx-bank-a`, `fabricx-bank-b` (cluster 1, listed in CURRENT section 1); `fabricx-bank-c`: cluster not settled (CURRENT says cluster 1, lead says cluster 2) [unverified], never touched if on cluster 2. Not part of S22. Inventory by names first: no repo manifests exist.
-- RED proof: `kubectl get ns | grep -c '^fabricx-'` before: >=4; after: 0 (cluster 1).
-- Rollback: none after delete; no backup possible without manifests (ADR 0002 Consequences).
+- Does: cluster 1 only: ns `fabricx-bi`, `fabricx-bank-a`, `fabricx-bank-b`, `fabricx-bank-c` as listed by CURRENT section 1 on cluster 1 (creation history [unverified]; the user confirms in ADR 0002 that they are this project's). The cluster-2 namespace of the same name `fabricx-bank-c` is foreign and is never read, used or touched. Before any delete: inventory with read-only `kubectl get` (same kinds as S22) added to CURRENT.md, export `kubectl get all,secret,configmap,pvc,networkpolicy -n <ns> -o yaml` (Secrets by name only in the file) to the named backup, PV reclaimPolicy read and patched to Retain or snapshotted if Delete.
+- RED proof: `kubectl get ns | grep -c '^fabricx-'` before: 4; after: 0 (cluster 1).
+- Rollback: none after delete; restore = the named backup `fabricx-multiregion-final-2026-11-<dd>` (manifests export + PV snapshots) into new namespaces.
 - Sources: ARCHITECTURE 2.4
 
 ### S22: Decommission `fabricx`
@@ -233,5 +233,5 @@ Key fact for the order: any change of an Arma party address or any new CA/MSP me
 - Rollback: none after delete; restore from `fabricx-final-2026-11-<dd>` into a new namespace with the PVs set to Retain.
 - Sources: CURRENT.md sections 6, 14; LENSA.md section 6
 
-## DEVIATION REQUEST (draft for lead)
-AFTER row: "Own client ... ledger reads via the org's committer query service or gateway ops (`history`, `records`, `finality`)" (ARCHITECTURE 2.1 last row). S4 needs Lensa's public-ledger lens (today: psql in `committer-db-0` through BI, `fabricx.ts:189`) and pod health (:399) without kubectl. The listed gateway ops give per-party views only; a global ledger lens or a health op may need a NEW op in the project's own `rdbi-driver` (not Paladin code; ARCHITECTURE header says no new custom code is proposed) or a committer query-service client (`committer docs/query-service.md`, not opened). Analyst to rule; no change to the target proposed here.
+## DEVIATION REQUEST
+None. (The drafter raised the public-ledger lens of S4; `lead` resolved it inside the AFTER row "ledger reads via the org's committer query service", see S4.)
