@@ -10,7 +10,7 @@ The live registry `evm-registry` (`0x99f3326e…7874`) was deployed with `rootle
 Left to the user. PLAN S11 stays BLOCKED(registry rootless) until one option is chosen; S10 (endpoints) is not blocked.
 
 ## Alternatives Considered
-- (a) Keep the registry, BI stays root owner (cost M). Pros: no new contract, no change to Noto/Pente registrations, same address. Cons: BI's registry key is needed once per new node identity; republish of existing identities is a node-key `setIdentityProperty` tx sent with `ptx_sendTransaction` (PLAN S11 runbook, no custom code), so only the ownership question remains; BI remains a third party for bank onboarding.
+- (a) Keep the registry, BI stays root owner (cost M). Pros: no new contract, no change to Noto/Pente registrations, same address. Cons: BI's registry key is needed once per new node identity; after a seed rotation (ADR 0004) the old `registry.nodeN` key can no longer call `setIdentityProperty` (IdentityRegistry.sol:108, no owner transfer), so rotated nodes need new names; republish of existing identities is a node-key `setIdentityProperty` tx sent with `ptx_sendTransaction` (PLAN S11 runbook, no custom code), so only the ownership question remains; BI remains a third party for bank onboarding.
 - (b) New rootless registry (cost L, constructor arg `true`, a new deployment). Pros: any bank registers under root with its own CR in its own namespace, no BI key outside BI. Cons: new registry address in every `PaladinRegistry` CR, four registrations redone, noto-pente depends on the same registry; names are first come, first served (unique-name check, IdentityRegistry.sol:77-78), so a squatted name is permanent.
 
 ## Consequences

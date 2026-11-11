@@ -7,29 +7,30 @@ Preserve (every step): chain 1337 and every address in CONTRACTS.md (validators 
 Reused by noto-pente and stealth: S1-S5 (namespace pattern, validator per bank), S8-S11 (Paladin node, DB, transport, registry), S16-S17 (gateway, OPA). One Paladin node per party serves Zeto, Noto and Pente today (CURRENT sections 2-3), so it moves once, here, with the noto and pente domain selectors unchanged. S8 = verified copy of each old node's Postgres (row counts equal), before S9; noto-pente S1/S2 depend on it.
 
 ## Order and dependencies
-1. S1 (none)  2. S2 after user cluster-2 credential  3. S3 after S1  4. S4 after S2,S3  5. S5 after S3,S4
-6. S6 after S1,S2  7. S7 after ADR 0004  8. S8 after S1,S2 (spend decision)  9. S9 after S5,S6,S8  10. S10 after S9  11. S11 after S10 (ownership part: ADR 0001)
+1. S1 (none)  2. S2 after user cluster-2 credential  3. S3 after S1  4. S4 after S2,S3  5. S5a after S3,S4; S5b after S21 (just before S22)
+6. S6 after S1,S2  7. S7 after ADR 0004  8. S8 after S1,S2 (spend decision)  9. S9 after S5a,S6,S8  10. S10 after S9  11. S11 after S10 (ownership part: ADR 0001)
 12. S12 after ADR 0002  13. S13 after ADR 0003  14. S14 (none)  15. S15 after S9  16. S16 after S1,S2,S9  17. S17 after S16
-18. S18 after ADR 0005  19. S19 after S16,S17  20. S20 after S19  21. S21 after S5,S9,S11,S17,S20 (+ S12/S13/S18 if their ADR changes the flow)  22. S22 after S21 (LAST)
+18. S18 after ADR 0005  19. S19 after S16,S17  20. S20 after S19  21. S21 after S5a,S9,S11,S17,S20 (+ S12/S13/S18 if their ADR changes the flow)  22. S22 after S21,S5b (LAST)
 
 ## Steps
 ### S1: Per-party namespaces on cluster 1
 - DELTA: 2 -> AFTER row: "ingress to RPC 8548 only from this namespace's gateway pods" (2a NetworkPolicy)
 - Owner: besu  Size: S
-- Prerequisites: none; user issues one namespace-scoped credential per party
+- Prerequisites: none; user issues one namespace-scoped credential per party; read-only capacity read (`kubectl describe nodes | grep -A5 'Allocated resources'`, disk-attach slots per node as in fabricx PLAN S11; the old stack stays until S22) quoted in CURRENT.md
 - Flags: CLUSTER-OP, user-only (credential issue)
-- Does: create ns `rd-zeto-bi`, `rd-zeto-bank-a`, `rd-zeto-bank-b` (labels `part-of=rd-zeto`, `party=<bi|bank-a|bank-b>`); NetworkPolicy `default-deny-ingress`, `allow-dns-egress`, `allow-same-namespace`, `rehearsal-no-9000-egress`; ServiceAccount `party-admin` + Role/RoleBinding limited to the namespace. Egress stays open except NetworkPolicy `rehearsal-no-9000-egress` on pods `app=paladin` (egress TCP 1-8999 and 9001-65535 via `endPort`, UDP, any; no TCP 9000): the S9 rehearsal node must not reach other parties; lifted in S21 (`endPort` on this CNI: [unverified]). Reused by noto-pente, stealth.
-- RED proof: `kubectl get ns rd-zeto-bank-a` before `NotFound`, after `Active`; `kubectl -n rd-zeto-bank-a auth can-i get pods -n rd-zeto-bank-b --as system:serviceaccount:rd-zeto-bank-a:party-admin` -> `no`; `kubectl -n rd-zeto-bank-a get netpol -o name | wc -l` -> `4`.
+- Does: create ns `rd-zeto-bi`, `rd-zeto-bank-a`, `rd-zeto-bank-b` (labels `part-of=rd-zeto`, `party=<bi|bank-a|bank-b>`); NetworkPolicy `default-deny-ingress`, `allow-dns-egress`, `allow-same-namespace`, `rehearsal-no-9000-egress` (pods `app=paladin`: egress to everything except TCP 9000, via `endPort` ranges 1-8999 and 9001-65535 [unverified on this CNI]; the S9 rehearsal node must not reach other parties; lifted in S21); ServiceAccount `party-admin` (Role on workloads, services, configmaps, pvc, networkpolicies, pods, pods/log; `secrets` only `create,update,patch`, never get/list/watch), `lensa-publisher` (ConfigMaps `<name>-gw-N-bundles` + `services/proxy` get on `bundle-server`, no `secrets`), `lensa-viewer` (pods get,list). Reused by noto-pente, stealth.
+- Admin credential custody: the cluster-1 cluster-admin kubeconfig stays with the platform operator (the user) only, mode 600, never on the Lensa host (Lensa holds an admin-style kubeconfig today, LENSA.md section 1.1; removed at S20); per-party kubeconfigs = the ServiceAccount tokens above; the cluster operator stays a trusted party for Secrets at rest (Kubernetes limit); Secrets encryption at rest on cluster 1 = optional cluster-config step, user-only; cluster 2 is not ours to configure.
+- RED proof: `kubectl get ns rd-zeto-bank-a` before `NotFound`, after `Active`; `kubectl -n rd-zeto-bank-a auth can-i get pods -n rd-zeto-bank-b --as system:serviceaccount:rd-zeto-bank-a:party-admin` -> `no`; `auth can-i get secrets -n rd-zeto-bank-a --as=system:serviceaccount:rd-zeto-bank-a:party-admin` -> `no`, same for `lensa-publisher`; `get netpol -o name | wc -l` -> `4`; egress proof: a throwaway probe pod labelled `app=paladin` (created and deleted inside this CLUSTER-OP, with throwaway listeners on 9000 in another party's ns and on 8549 of its own ns): TCP connect to the other party's 9000 fails, to 8549 of its own ns succeeds. S9 requires this proof.
 - Rollback: `kubectl delete ns rd-zeto-<x>` (empty at this point).
-- Sources: https://kubernetes.io/docs/concepts/services-networking/network-policies/ (as in ARCHITECTURE 2a); CURRENT section 11 (current ns have no per-party RBAC).
+- Sources: https://kubernetes.io/docs/concepts/services-networking/network-policies/; CURRENT section 11; iroha3 PLAN S1 (secrets create-only Role).
 
 ### S2: Namespace on cluster 2 (first write there)
 - DELTA: 11, 2 -> AFTER row: "ns-bank-c ... own operator, bank-gw, keys Secret C" (2a diagram)
 - Owner: besu  Size: S
 - Prerequisites: user supplies the real cluster-2 credential (the one supplied so far may resolve to cluster 1: [unverified], the RED proof checks it)
-- Flags: CLUSTER-OP, user-only, spend (none yet)
-- Does: create ONLY ns `rd-zeto-bank-c` and in it the same four NetworkPolicies and `party-admin` objects as S1. No read of any existing cluster-2 namespace, no cluster-scoped object here (CRDs wait for S9's own approval).
-- RED proof: `kubectl get nodes -L topology.kubernetes.io/region` (node level) -> `ap-southeast-1` rows, before any write; then `kubectl get ns rd-zeto-bank-c` -> `Active` and `kubectl auth can-i create pods -n rd-zeto-bank-c` -> `yes`. Never a full `kubectl get ns` on cluster 2 (foreign namespaces).
+- Flags: CLUSTER-OP, two separate GOs, user-only, spend (none yet)
+- Does: (S2a, GO 1) create ONLY ns `rd-zeto-bank-c`; no read of any existing cluster-2 namespace, no cluster-scoped object (CRDs wait for S9's own approval). (S2b, GO 2) in it the ServiceAccounts, Roles and four NetworkPolicies of S1 (same custody rule: cluster 2 admin credential stays with the user).
+- RED proof: S2a: `kubectl get nodes -L topology.kubernetes.io/region` (node level) -> `ap-southeast-1` rows before any write; then `kubectl get ns rd-zeto-bank-c` -> `Active` and `kubectl auth can-i create pods -n rd-zeto-bank-c` -> `yes`; never a full `kubectl get ns` on cluster 2. S2b: `auth can-i get secrets -n rd-zeto-bank-c --as=system:serviceaccount:rd-zeto-bank-c:party-admin` -> `no`; `get netpol -o name | wc -l` -> `4`.
 - Rollback: `kubectl delete ns rd-zeto-bank-c` (empty). Cluster 2: nothing else is ever deleted.
 - Sources: ARCHITECTURE 2a "Capacity on cluster 2" (user rule: new namespaces only).
 
@@ -37,7 +38,7 @@ Reused by noto-pente and stealth: S1-S5 (namespace pattern, validator per bank),
 - DELTA: 3 -> AFTER row: "Besu QBFT validator (bank nodekey)" and 2a "Besu validator | 1, own nodekey"
 - Owner: besu  Size: L
 - Prerequisites: S1; read-only: ConfigMap `besu-node-validator-1-besu-config` checked for `Xdns-enabled` / `Xdns-update-enabled` (names/flags only), result recorded in CURRENT.md
-- Flags: CLUSTER-OP, spend (LoadBalancer Services)
+- Flags: CLUSTER-OP, spend, user-only (3 LoadBalancer Services, 3 x 40Gi PVCs)
 - Does: in each of rd-zeto-bi/-bank-a/-bank-b: Secret `besu-nodekey` (generated inside the ns, never leaves it); ConfigMap `besu-genesis` byte-identical to live `besu-genesis` (chainId 1337, qbft 2 s / 4 s); StatefulSet `besu-validator` image `hyperledger/besu:26.8.1`, PVC 40Gi, config.toml copied from live `besu-node-validator-1-besu-config` with `p2p-host` = this ns's p2p Service address and `static-nodes-file` listing the 4 old validators AND the other 2 new cluster-1 `besu-p2p` addresses (in-cluster DNS names as the live files use, `opa/README.md:221`; the C address is added after S4, before S22); `discovery-enabled=false`. Starts as NON-validator. Service `besu-p2p` LoadBalancer TCP 30303 only (peers dial by TCP; no UDP). NetworkPolicy: 8545 only from this ns's gateway and Paladin pods, 30303 from the other validators. In ns `besu` add ONE ingress rule per `besu-node-validator-N-ingress` for 30303 from `rd-zeto-*`. Permissioning stays off (CURRENT section 1: no `permissions-*` keys). Reused by noto-pente (baseLedgerEndpoint) and stealth (chain door).
 - RED proof: before `kubectl -n rd-zeto-bank-a get sts besu-validator` -> `NotFound`; after, via port-forward to the pod: `eth_chainId` -> `0x539`, `net_peerCount` >= `0x3`, `admin_peers` lists the 2 other new cluster-1 enodes, `eth_blockNumber` within 2 blocks of `besu-node-validator-1`.
 - Rollback: delete sts, pvc, Services in `rd-zeto-<x>`; remove the added rule in `besu`.
@@ -54,14 +55,15 @@ Reused by noto-pente and stealth: S1-S5 (namespace pattern, validator per bank),
 - Rollback: delete sts, pvc, Services in `rd-zeto-bank-c`.
 - Sources: ARCHITECTURE 2a (cross-cluster limits, latency 15-30 ms vs 2 s / 4 s: no tunable changes); Besu quickstart-with-privacy "Add non-validator node" as cited there.
 
-### S5: Validator swap: vote in the 4 party nodes, vote out the 4 old ones
+### S5: Validator swap in two parts: S5a vote in the 4 party nodes, S5b vote out the 4 old ones
 - DELTA: 3 -> AFTER row: "4 validators, one per party; any 1 down = 3 of 4"
 - Owner: besu  Size: L
-- Prerequisites: S3, S4 (new nodes synced); each party's operator casts its own vote
-- Flags: CLUSTER-OP
-- Does: add one, confirm, discard, then the next. Each validator of the CURRENT set (more than 50%) calls `qbft_proposeValidatorVote(<new>, true)` on its own node; the vote lands when that validator proposes; wait until the address is in `qbft_getValidatorsByBlockNumber`, then each calls `qbft_discardValidatorVote(<new>)`; then the same with `(<old>, false)`; repeat for BI, A, B, C. Never below 4 of 5 up during the transitional set (n=5 quorum = ceil(2n/3) = 4, derived, Besu source not read); the 4-validator floor (3 of 4) returns after the last removal. Old validator pods keep running as peers until S22 (they serve the old Paladin nodes until S21). Admin RPC is denied through the OPA door (CURRENT section 1), so calls go by port-forward to the pod.
-- RED proof: before `qbft_getValidatorsByBlockNumber latest` = the 4 old addresses (`0xe89105d4…25d0`, `0x712f8366…69fd`, `0x95197d60…a715`, `0xd27cb197…38d9f3`); after: 4 addresses, none of them old, each address mined at least 1 of the last 20 blocks, block number rises 3 times in 10 s (blockperiod 2 s).
-- Rollback: vote the old address back in with the same procedure while the old pod is still up (valid until S22).
+- Prerequisites: S5a: S3, S4 (new nodes synced as non-validators). S5b: S21 cutover proven by VERIFY (qa PASS on every flow + BI-balance proof); runs just before S22
+- Flags: S5a CLUSTER-OP. S5b user-only, destructive, CLUSTER-OP (own approval at that time)
+- Does (S5a): add one, confirm, discard, then the next. More than 50% of the CURRENT set each call `qbft_proposeValidatorVote(<new>, true)` on their own node; the vote lands when that validator proposes; wait until the address is in `qbft_getValidatorsByBlockNumber`, then each calls `qbft_discardValidatorVote(<new>)`; repeat for BI, A, B, C. Transitional set n=8: quorum ceil(2n/3)=6 [derived, Besu source not read]; never below 6 of 8 up (n=5,6,7 on the way need 4,4,5). Votes on the OLD pods are cast by the cluster-1 operator (cluster-admin) through the `besu` namespace admin RPC by port-forward (the OPA door denies admin RPC, CURRENT section 1), not by party credentials.
+- Does (S5b): the same procedure with `(<old>, false)`, one old validator at a time; the 4-validator floor (3 of 4) returns after the last removal. Old pods stay as non-validator peers until S22.
+- RED proof: S5a: before `qbft_getValidatorsByBlockNumber latest` = the 4 old addresses (`0xe89105d4…25d0`, `0x712f8366…69fd`, `0x95197d60…a715`, `0xd27cb197…38d9f3`); after: 8 addresses (4 old + 4 new), block number rises 3 times in 10 s (blockperiod 2 s). S5b: 4 addresses, none old, each mined at least 1 of the last 20 blocks, blocks rising.
+- Rollback: S5a: vote the new address out the same way. S5b: vote an old address back in while its pod is up (valid until S22).
 - Sources: Besu docs `private-networks/how-to/configure/consensus/qbft` (Add and remove validators; docs unversioned, live image 26.8.1), `private-networks/concepts/poa` (liveness) via ARCHITECTURE section 4 sources.
 
 ### S6: Seeds and signing under party custody
@@ -79,25 +81,25 @@ Reused by noto-pente and stealth: S1-S5 (namespace pattern, validator per bank),
 - Owner: besu  Size: L
 - Prerequisites: ADR 0004 decided
 - Flags: BLOCKED(Zeto seed rotation), user-only
-- Does: only if the user chooses rotation: new seeds per party, each holder moves its UTXOs to the new BabyJubJub key by ordinary Zeto transfers, BI re-assigns token owner and factory owner to the new BI keys, old Secrets destroyed. Not planned further until the ADR is decided.
+- Does: only if the user chooses rotation: new seeds per party, each holder moves its UTXOs to the new BabyJubJub key by ordinary Zeto transfers, BI re-assigns token owner and factory owner to the new BI keys, old Secrets destroyed. Rotation needs NEW node names: registry entries are owned by the old `registry.nodeN` key and there is no owner transfer (`IdentityRegistry.sol:108` strict equality), so "node1..4 preserved" breaks (ADR 0004). Not planned further until the ADR is decided.
 - RED proof: `owners.{BI,A,B,C}` in `state/zeto.json` differ from today's, `owner()` of RD and DFABI -> new BI address, balances per party unchanged (qa, VERIFY.md).
 - Rollback: none after the old Secrets are destroyed; before that, return to the old seeds.
-- Sources: ARCHITECTURE section 3 DELTA 1; CURRENT sections 4-6.
+- Sources: ARCHITECTURE section 3 DELTA 1; CURRENT sections 4-6; paladin@v1.0.0:solidity/contracts/registry/IdentityRegistry.sol:103-108.
 
 ### S8: Postgres per party and verified copy of the old node's DB
 - DELTA: 6 -> AFTER row: "`database.mode: preConfigured` (external HA PostgreSQL, DSN with passwordSecret)"
 - Owner: besu  Size: M
 - Prerequisites: S1, S2; precondition: `ptx_queryPendingTransactions` -> `[]` on the old node of that party (quoted in the RED); user chooses the Postgres product (managed or in-cluster operator: ARCHITECTURE did not open HA operators)
 - Flags: CLUSTER-OP, spend, user-only (product choice)
-- Does: one PostgreSQL per party in its ns (Service `paladin-pg`, Secret `paladin-pg-credentials`, storage >= 20Gi `alicloud-essd` as today's `paladin-nodeN-pgdata`; used size not read: [unverified]); NetworkPolicy lets only the Paladin pod reach it; backup schedule named by the product choice. Copy: Lensa idle and lock held, pending list empty, `pg_dump` the old `paladin-node<N>-0` sidecar DB with the node up (scaling the StatefulSet to 0 would stop its Postgres), restore into the new instance, verify row counts per table equal; fallback = throwaway `postgres:17` pod on the old PVC.
-- RED proof: `ptx_queryPendingTransactions` on the old node -> `[]`; per-table `select count(*)` old = new (listed side by side); `psql "$DSN" -c 'select 1'` -> `1` from the Paladin pod, times out from another ns; before: empty DB. Table list [unverified].
+- Does: one PostgreSQL per party in its ns (Service `paladin-pg`, Secret `paladin-pg-credentials`, storage >= 20Gi `alicloud-essd` as today's `paladin-nodeN-pgdata`; used size not read: [unverified]); NetworkPolicy lets only the Paladin pod reach it; backup schedule named by the product choice. Copy: Lensa idle and lock held, pending list empty, `pg_dump` the old `paladin-node<N>-0` sidecar DB with the node up (scaling the StatefulSet to 0 would stop its Postgres), restore into the new instance, verify row counts per table equal; fallback = throwaway `postgres:17` pod on the old PVC. HA per AFTER: one replica on a PVC that survives pod restart; restore test: a dump restored into a scratch Postgres, row counts equal.
+- RED proof: `ptx_queryPendingTransactions` on the old node -> `[]`; per-table `select count(*)` old = new (listed side by side); `psql "$DSN" -c 'select 1'` -> `1` from the Paladin pod, times out from another ns; restart test: delete the Postgres pod, it returns Ready on the same PVC with unchanged counts; scratch restore counts equal; before: empty DB. Table list [unverified].
 - Rollback: delete the instance and the copy (the old DB is only read).
 - Sources: paladin@v1.0.0:operator/api/v1alpha1/paladin_types.go:170-185; doc-site/docs/concepts/cloud_native.md:5,21.
 
 ### S9: Paladin node per party (rehearsal copy, scaled to 0)
 - DELTA: 1, 3, 6, 11 -> AFTER row: "Paladin node | 1 CR `paladin` + own operator"
 - Owner: besu  Size: L
-- Prerequisites: S5, S6, S8; precondition: `ptx_queryPendingTransactions` -> `[]` on all 4 old nodes (a restored Prepared tx would be re-dispatched with the same signer keys: nonce clash); on cluster 2 the CRD chart is a cluster-scoped write needing its own user approval
+- Prerequisites: S5a, S6, S8, S1 egress proof (probe to another party's 9000 fails); precondition: `ptx_queryPendingTransactions` -> `[]` on all 4 old nodes (a restored Prepared tx would be re-dispatched with the same signer keys: nonce clash); on cluster 2 the CRD chart is a cluster-scoped write needing its own user approval
 - Flags: CLUSTER-OP, user-only (cluster-2 CRDs)
 - Does: Helm `paladin-operator` v1.0.0 per ns (`WATCH_NAMESPACE` = ns, `installCRDs=false`; CRD chart `paladin-operator-crd` installed once on cluster 2: that cluster has no Paladin CRDs [unverified]); CR `paladin node<N>` with the live fork digest `ghcr.io/radityaaa43/paladin@sha256:6f113f38…`, `baseLedgerEndpoint` = own Besu (S3/S4) http :8545 / ws :8546, `database.mode preConfigured`, `secretBackedSigners` per S6, `keyManager.disableSignRPC: true`, domain selectors `noto` and `pente` plus `config.domains.zeto` copied verbatim (registryAddress `0x753a64ea…cf91`, `allowSigning`, `defaultGasLimit 30000000`), PaladinDomain CRs and PaladinRegistry `evm-registry` on `0x99f3326e…7874`. NO `PaladinRegistration` here (S11). Rehearsal: start the node on the S8 copy (live write risk: hence the precondition and the S1 egress policy; its new self-signed cert is refused by peers until S11 republishes, grpc_transport.go:126-137), prove, scale to 0.
 - RED proof: with Lensa frozen: tx id list from the new node (`ptx_queryTransactionsFull`, limit 60, port-forward) equals the old node's saved list; after the restore, `bi@node1` resolved (known names only) equals `owners.BI` of `state/zeto.json` and the eth address `0xc77e80b8878c2509552b16336d5fc9bb0dc415a9`; `keymgr_sign` -> RPC error (disabled); a connect to another party's 9000 from the pod fails; `ptx_queryPendingTransactions` `[]` on all 4 old nodes quoted; before: no `paladin` CR in `rd-zeto-<x>`. Method names [unverified].
@@ -109,20 +111,20 @@ Reused by noto-pente and stealth: S1-S5 (namespace pattern, validator per bank),
 - Owner: besu  Size: M
 - Prerequisites: S9
 - Flags: CLUSTER-OP, spend (LoadBalancer)
-- Does: per party Service `paladin-transport` LoadBalancer 9000/TCP (port 9000, not 8549); transport config `externalHostname` = the LB address, `tls.clientAuth true`, `directCertVerification` default true (no shared CA); cert-manager Certificate `paladin-node<N>-mtls` (issuer `selfsigned-issuer`, kind [unverified]) with CN = node name and the LB address in SAN; NetworkPolicy 9000 only from the other parties' egress IPs (`ipBlock`, source IP may be LB or node IP).
-- RED proof: from `rd-zeto-bank-a`, `nc -zv <rd-zeto-bank-c LB> 9000` -> `succeeded`, before: timeout; `openssl s_client` without client cert is refused by the handshake (clientAuth).
-- Rollback: delete the Services and the Certificate; the CR keeps the in-cluster default hostname.
-- Sources: paladin@v1.0.0:transports/grpc/internal/grpctransport/config.go:23-47, grpc_transport.go:105,337; doc-site/docs/administration/certificate_management.md:3-25; doc-site/docs/getting-started/installation-manual.md:433-461.
+- Does: per party Service `paladin-transport` LoadBalancer 9000/TCP (port 9000, not 8549); transport config `externalHostname` = the LB address, `tls.clientAuth true`, `directCertVerification` default true (no shared CA); no cert-manager: the project script `besu@45122ae:opa/mtls/gen-certs.sh` (as S16) makes each party's own self-signed CA + node cert (CN = node name, LB address in SAN) into Secret `paladin-node<N>-mtls` (tls.crt, tls.key, ca.crt) in that party's namespace; CR `transports[0].tls` sets `secretName` only (no `certName`, no `issuer`), so the operator creates no Certificate (`paladin_controller.go:1345-1371`); no Issuer or ClusterIssuer object on either cluster; whether gen-certs.sh already issues a Paladin node cert: [unverified] (it lists gw-N, lensa, fx-gw-N certs, `gen-certs.sh:1-7`), else a script change in rd-besu; NetworkPolicy 9000 only from the other parties' egress IPs (`ipBlock`, source IP may be LB or node IP).
+- RED proof: from `rd-zeto-bank-a`, `nc -zv <rd-zeto-bank-c LB> 9000` -> `succeeded`, before: timeout; `openssl s_client` without client cert is refused by the handshake (clientAuth); `kubectl -n rd-zeto-bank-a get secret paladin-node2-mtls -o name` -> exists, and `openssl x509 -noout -subject` on the generated `tls.crt` file (before apply) shows CN `node2`.
+- Rollback: delete the Services and the Secret; the CR keeps the in-cluster default hostname.
+- Sources: paladin@v1.0.0:transports/grpc/internal/grpctransport/config.go:23-47, grpc_transport.go:105,337; operator/internal/controller/paladin_controller.go:1345-1371; doc-site/docs/getting-started/installation-manual.md:433-461.
 
 ### S11: Registry ownership and endpoint republish
-- DELTA: 5 -> AFTER row: "Child identity `owner` is chosen at registration"
+- DELTA: 5, 4 (endpoint republish = analyst DELTA 4a, addendum, PR number to follow) -> AFTER row: "Child identity `owner` is chosen at registration"
 - Owner: besu  Size: M (a) / L (b)
 - Prerequisites: S10; ADR 0001 only for the ownership part (b)
 - Flags: BLOCKED(registry rootless) for the ownership part only; the republish runbook below needs no decision; user-only
-- Does: the `PaladinRegistration` CR cannot republish: its first tx `registerIdentity` reverts "Name already taken" for existing names (`IdentityRegistry.sol:77-78`) and a failed tx returns before the publish loop (`paladinregistration_controller.go:110-120`, loop :128-155); editing CR status to skip it is a hack: not used. Runbook (a), no custom code, per node owner: (1) read the node's local transport details `{endpoint, issuers}` (Go client `LocalTransportDetails`; JSON-RPC wire name [unverified]; `grpc_transport.go:337-345`); (2) `identityHash` = entry named after the node, parentId null, from `reg_queryEntries` (:333-338); (3) send `setIdentityProperty(identityHash, "transport.grpc", <details>)` from the node key as a public tx with upstream `ptx_sendTransaction` (the same tx the operator builds, :318-326; owner check `IdentityRegistry.sol:103-108`). Option (b): a rootless registry, four new registrations in each party's own ns, new address in every `PaladinRegistry` CR.
+- Does: the `PaladinRegistration` CR cannot republish: its first tx `registerIdentity` reverts "Name already taken" for existing names (`IdentityRegistry.sol:77-78`) and a failed tx returns before the publish loop (`paladinregistration_controller.go:110-120`, loop :128-155); editing CR status to skip it is a hack: not used. Runbook (a), no custom code, per node owner: (1) read the node's local transport details `{endpoint, issuers}` (JSON-RPC `transport_localTransportDetails`, Go client `LocalTransportDetails`; `grpc_transport.go:337-345`); (2) `identityHash` = entry named after the node, parentId null, from `reg_queryEntries` (`paladinregistration_controller.go:317-322`); (3) send `setIdentityProperty(identityHash, "transport.grpc", <details>)` from the node key as a public tx with upstream `ptx_sendTransaction` (the same tx the operator builds, `paladinregistration_controller.go:334-343`; owner check `IdentityRegistry.sol:103-108`). Option (b): a rootless registry, four new registrations in each party's own ns, new address in every `PaladinRegistry` CR.
 - RED proof: `reg_queryEntriesWithProps` for node2 from node1 -> property `transport.grpc` names `dns:///<LB>:9000`; before: `dns:///paladin-node2.paladin.svc.cluster.local:9000`. Method name [unverified].
 - Rollback: republish the old endpoint with the same mechanism (any time).
-- Sources: paladin@v1.0.0:solidity/contracts/registry/IdentityRegistry.sol:45-47,77-78,103-108; operator/internal/controller/paladinregistration_controller.go:110-155,318-338; transports/grpc/internal/grpctransport/grpc_transport.go:320-345; ARCHITECTURE section 2a cross-cluster limits.
+- Sources: paladin@v1.0.0:solidity/contracts/registry/IdentityRegistry.sol:45-47,77-78,103-108; operator/internal/controller/paladinregistration_controller.go:110-155,317-343; transports/grpc/internal/grpctransport/grpc_transport.go:320-345; ARCHITECTURE section 2a cross-cluster limits.
 
 ### S12: Proving-key ceremony
 - DELTA: 10 -> AFTER row: "proving keys from a ceremony" (SHARED box)
@@ -145,7 +147,7 @@ Reused by noto-pente and stealth: S1-S5 (namespace pattern, validator per bank),
 - Sources: paladin@v1.0.0:solidity/contracts/shared/Atom.sol:102-107; doc-site/docs/architecture/atomic_interop.md:105-110.
 
 ### S14: Decimals mismatch recorded and the comment corrected
-- DELTA: none (correctness fix; analyst records the addendum) -> AFTER row preserved: "Zeto factory + verifier contracts" (units untouched)
+- DELTA: none (correctness fix; analyst addendum requested) -> AFTER row preserved: "Zeto factory + verifier contracts" (units untouched)
 - Owner: besu  Size: S
 - Prerequisites: none
 - Flags: none
@@ -159,7 +161,7 @@ Reused by noto-pente and stealth: S1-S5 (namespace pattern, validator per bank),
 - Owner: besu  Size: S
 - Prerequisites: S9
 - Flags: none
-- Does: new groups already use `externalCallsEnabled: false` (`flows.ts:100`); the three live groups were created with `true` and it is fixed at deploy (CURRENT section 6). Read the live config of groups A, B, C and the BI reachability behaviour, write both into `besu@9890701:zeto/docs/r1-limitation.md`; no replacement groups unless the user asks (BI history would move).
+- Does: new groups already use `externalCallsEnabled: false` (`flows.ts:100`); the three live groups were created with `true` and it is fixed at deploy (CURRENT section 6). This narrows DELTA 8: `externalCallsEnabled` is only recorded, live groups are immutable (DEVIATION REQUEST item 2). Read the live config of groups A, B, C and the BI reachability behaviour, write both into `besu@9890701:zeto/docs/r1-limitation.md`; no replacement groups unless the user asks (BI history would move).
 - RED proof: `pgroup_getGroupById` for each group id of `state/zeto.json` -> `externalCallsEnabled` value quoted in the doc ([unverified] that the RPC result carries it: the flag is in the Pente config ABI, `PenteConfiguration.java:246-277`, not proven in the RPC result); doc has an SLO line "BI down = reports lost" with the 2026-11-10 test date.
 - Rollback: `git revert` the docs commit.
 - Sources: paladin@v1.0.0:domains/pente/src/main/java/io/kaleido/paladin/pente/domain/PenteDomain.java:100-108,697; core/go/internal/groupmgr/manager.go:155-172.
@@ -178,8 +180,8 @@ Reused by noto-pente and stealth: S1-S5 (namespace pattern, validator per bank),
 - DELTA: 2 -> AFTER row: "Own RPC credentials | `rpcAuthorizers` + `rpcServer.authorizers`, one credential set per bank"
 - Owner: besu  Size: M
 - Prerequisites: S16
-- Flags: CLUSTER-OP
-- Does: Deployment `bundle-server` in each ns (`opa/k8s/bundle-server.yaml:9,68`) with the rd-besu #9 hardening (sink token, NetworkPolicy; merged, not rolled out: CURRENT section 8); each owner signs its own bundle with a key in its own custody (`opa/README.md:22-26`, `OPA_KEYS_DIR`); BI bundle served from `rd-zeto-bi`, pulled by every gateway (cluster 2 over a BI Service: path [unverified]); rego unchanged (same revisions as CURRENT section 8). Paladin `rpcAuthorizers` + `rpcServer.authorizers` credential per bank replace `paladin-basic-auth`.
+- Flags: CLUSTER-OP, spend (bundle-server exposure for bank C)
+- Does: Deployment `bundle-server` in each ns (`opa/k8s/bundle-server.yaml:9,68`) with the rd-besu #9 hardening (sink token, NetworkPolicy; merged, not rolled out: CURRENT section 8); each owner signs its own bundle with a key in its own custody (`opa/README.md:22-26`, `OPA_KEYS_DIR`); BI bundle served from `rd-zeto-bi`, pulled by every gateway (bank C on cluster 2 pulls through a `bundle-server` Service of type `LoadBalancer`, or NodePort, with mTLS: spend); rego unchanged (same revisions as CURRENT section 8). Paladin `rpcAuthorizers` + `rpcServer.authorizers` credential per bank replace `paladin-basic-auth`.
 - RED proof: `kubectl -n rd-zeto-bank-a get secret paladin-basic-auth` -> `NotFound`; a sink POST without token -> `401` [code unverified]; bundle status shows `bank-a-zeto.<rev>` active on `bank-gw-2` with the same rego revision as today.
 - Rollback: delete the Deployment, ConfigMaps; gateways in S16 fall back to deny (enforcing, `failure_mode_allow: false`).
 - Sources: `besu@45122ae:opa/README.md:22-26,130,218`; paladin@v1.0.0:doc-site/docs/administration/auth.md:88-134.
@@ -209,15 +211,15 @@ Reused by noto-pente and stealth: S1-S5 (namespace pattern, validator per bank),
 - Owner: fe  Size: S
 - Prerequisites: S19
 - Flags: none
-- Does: `server/src/policy/kube.ts:3` `NS='paladin'` becomes a per-gateway namespace (`bank-gw-N` -> `rd-zeto-<party>`; `kube.ts:22,65` guards and the `bundle-server:sink` read follow); `server/src/adapters/besu-network.ts:20` namespace `besu` -> the four `rd-zeto-<party>` pods `besu-validator-0`. Each uses that party's namespace-scoped credential (S1), not one admin kubeconfig.
-- RED proof: `grep -n "NS = 'paladin'\|namespace: 'besu'" frontend/server/src` -> 0 hits after (2 before); existing in-memory `Kube` tests pass.
+- Does: `server/src/policy/kube.ts:3` `NS='paladin'` becomes a per-gateway namespace (`bank-gw-N` -> `rd-zeto-<party>`; `kube.ts:22,65` guards and the `bundle-server:sink` read follow); `server/src/adapters/besu-network.ts:20` namespace `besu` -> the four `rd-zeto-<party>` pods `besu-validator-0`. The Publisher uses SA `lensa-publisher` (ConfigMaps only) and the network view SA `lensa-viewer` (pods read), both from S1; Lensa's admin-style kubeconfig (LENSA.md section 1.1) leaves the Lensa host here.
+- RED proof: `grep -n "NS = 'paladin'\|namespace: 'besu'" frontend/server/src` -> 0 hits after (2 before); existing in-memory `Kube` tests pass; `lensa.env` `KUBECONFIG` names no cluster-admin context (names only).
 - Rollback: `git revert`.
 - Sources: LENSA.md section 6 (rows `paladin`, `besu`, decommission check lines 116-121).
 
 ### S21: Cutover party by party and qa proof
 - DELTA: 1, 3, 6 -> AFTER row: "Each bank runs its Paladin node in its own namespace"
 - Owner: qa (steps by besu, fe)  Size: L
-- Prerequisites: S5, S9, S11, S17, S20
+- Prerequisites: S5a, S9, S11, S17, S20
 - Flags: CLUSTER-OP, user-only (maintenance window)
 - Does: order bank-a, bank-b, bank-c, bi (BI last, it receives the reports). Per party: freeze Lensa writes and hold the lock; quiesce: `ptx_queryPendingTransactions` -> `[]` on all 4 old nodes (quoted); fresh `pg_dump` with the old node UP (its Postgres is the sidecar), restore, row counts equal (S8 method; fallback throwaway `postgres:17` pod on the old PVC); then scale the old `paladin-node<N>` StatefulSet to 0 (not deleted); delete `rehearsal-no-9000-egress` in that namespace; scale new node up; endpoint published (S11); flip that party's forward (S19, S20); unfreeze. After all four: qa runs `zeto/VERIFY.md` for issue, transfer, DvP RD vs DFABI, outsider C sealed, and the BI-balance proof (BI ledger verified outputs vs chain commitments, same `tx 0x664c1faf2f09…` view per party as CURRENT section 9); transactions made after the last restart (TEAM.md section 10 rule 3).
 - RED proof: per party: `GET /api/history?model=zeto&party=<P>` shows the old tx ids and a NEW tx made after cutover; R1 views = BI `reported`, A `clear`, B `clear`, C `sealed`.
@@ -227,12 +229,14 @@ Reused by noto-pente and stealth: S1-S5 (namespace pattern, validator per bank),
 ### S22: Decommission `besu`, `paladin`, `dfabi`
 - DELTA: 2, 3 -> AFTER row: "Bank-owned namespace ... kubeconfig and credentials" (old shared ns removed)
 - Owner: lead  Size: M
-- Prerequisites: shared with noto-pente and stealth plans; executes once, after all three cutovers. Cutover proven (qa PASS on the new namespaces for every flow + BI-balance proof). Nothing points at the old ns: LENSA.md "Namespace references" rows `paladin`, `besu`, `dfabi` all clean (forwards.conf 0 lines, `lensa-pf@*` none, `kube.ts` and `besu-network.ts` updated, OPA bundle server and CI: ci.yml names no ns); dfabi bank backends repointed or dfabi retired (user decides). Surviving data copied BEFORE any delete: Postgres dump per node of `paladin-node1..4-pgdata` (PV reclaim = Delete, 4 x 20Gi) as backup `zeto-decom-pgdump-<date>`; Besu `data-besu-node-validator-1..4-0` 4 x 40Gi (Retain, kept as is, not a backup); Secrets `node1..4.keys`, `paladin-nodeN-mtls`, `besu-node-validator-N-keys`, CM `besu-genesis`; Lensa state files; `~/.opa-keys`, `~/.opa-mtls`; `dfabi` PVs `data-postgres-0`, `runner-state` (Delete, 2 x 5Gi).
+- Prerequisites: shared with noto-pente and stealth plans; executes once, after all three cutovers. Cutover proven (qa PASS on the new namespaces for every flow + BI-balance proof). Nothing points at the old ns: LENSA.md "Namespace references" rows `paladin`, `besu`, `dfabi` all clean (forwards.conf 0 lines, `lensa-pf@*` none, `kube.ts` and `besu-network.ts` updated, OPA bundle server and CI: ci.yml names no ns); dfabi bank backends repointed or dfabi retired (user decides). S5b done. Surviving data copied BEFORE any delete into the named backup `zeto-decom-<date>` (manifests incl. CM `besu-genesis`, Lensa state files, Postgres dump per node of `paladin-node1..4-pgdata` (PV reclaim = Delete, 4 x 20Gi), PV snapshots; NO seed or CA key); Besu `data-besu-node-validator-1..4-0` 4 x 40Gi (Retain, kept as is, not a backup); no seed or CA-key backup in any shared place: each party keeps its own copy from S6 (OPA signing keys from S17) in its namespace; `dfabi` PVs `data-postgres-0`, `runner-state` (Delete, 2 x 5Gi).
 - Flags: user-only, CLUSTER-OP (own approval at that time), destructive
-- Does: inventory = CURRENT.md section 11 "Decommission inventory": `besu` 4 STS, 4 PVC 40Gi; `paladin` 6 Deployments incl. `bank-gw-1..4`, 4 STS, 4 PVC 20Gi, 43 `smartcontractdeployment`, 3 `paladindomain`, 4 `paladinregistration`, 1 `paladinregistry`; `dfabi` 9 Deployments, 2 PVC. PVC total this plan touches: 160 Gi Besu + 80 Gi Paladin (+10 Gi dfabi). First re-set the 4 `paladin` PVs to Retain (`kubectl patch pv ... persistentVolumeReclaimPolicy=Retain`) or copy, verify the dump restores, then delete workloads, then namespaces. Cluster-scoped CRDs stay. Cluster 2: nothing is ever deleted.
-- RED proof: `kubectl get ns besu paladin` -> `NotFound`; qa re-runs S21 read-only checks on the new namespaces (PASS); the dump restores into a scratch DB (row counts equal) before the delete.
-- Rollback: none after delete; restore `zeto-decom-pgdump-<date>` into S8 and the retained Besu PVs / seeds from the named secret backup.
+- Does: inventory = CURRENT.md section 11 "Decommission inventory": `besu` 4 STS, 4 PVC 40Gi; `paladin` 6 Deployments incl. `bank-gw-1..4`, 4 STS, 4 PVC 20Gi, 43 `smartcontractdeployment`, 3 `paladindomain`, 4 `paladinregistration`, 1 `paladinregistry`; `dfabi` 9 Deployments, 2 PVC. PVC total this plan touches: 160 Gi Besu + 80 Gi Paladin (+10 Gi dfabi). First re-set the 4 `paladin` PVs to Retain (`kubectl patch pv ... persistentVolumeReclaimPolicy=Retain`) or copy, verify the dump restores, then delete workloads, then namespaces. Then destroy the shared copies (old Secrets `node1..4.keys`, `paladin-nodeN-mtls`, `besu-node-validator-N-keys`; host dirs `~/.opa-keys`, `~/.opa-mtls`) and record it in `zeto-decom-destroyed-<date>` (names and date, no values). Cluster-scoped CRDs stay. Cluster 2: nothing is ever deleted.
+- RED proof: `kubectl get ns besu paladin` -> `NotFound`; qa re-runs S21 read-only checks on the new namespaces (PASS); the dump restores into a scratch DB (row counts equal) before the delete; `ls ~/.opa-keys ~/.opa-mtls` -> `No such file`; the destruction record exists.
+- Rollback: none after delete; restore the named backup `zeto-decom-<date>` (manifests, dumps, PV snapshots) into S8 and the retained Besu PVs; seeds and CA keys come from each party's own copy (S6, S17), never from a shared backup.
 - Sources: CURRENT.md section 11; LENSA.md section 6.
 
-## DEVIATION REQUEST (draft for lead)
-None for the AFTER rows. One open conflict goes to `analyst` with S12: replacing the proving keys in the Paladin image is a rebuild of the fork image, which the user's "no new custom code" rule may exclude; the AFTER row "proving keys from a ceremony" is unchanged, the route is undecided.
+## DEVIATION REQUEST (draft for lead; to `analyst`, asking for DELTA addenda)
+1. S3/S4: AFTER 2a "30303 TCP+UDP" vs plan "TCP-only LoadBalancer, `discovery-enabled=false`, `static-nodes-file`". Reason (Besu docs, unversioned): UDP carries discovery only, static-nodes peers dial by TCP, and a mixed TCP+UDP LoadBalancer on this provider is [unverified]. DNS in an enode stays early access (`--Xdns-enabled`), so cluster 2 uses LB IPs. The Xdns read in S3 is a read-only prerequisite.
+2. S15: AFTER DELTA 8 / 2 "report groups {bank, BI}" is narrowed: `externalCallsEnabled` is only recorded, the three live groups are immutable and keep `true`.
+3. S12: replacing the proving keys in the Paladin image is a rebuild of the fork image, which the user's "no new custom code" rule may exclude; the AFTER row "proving keys from a ceremony" is unchanged, the route is undecided.
