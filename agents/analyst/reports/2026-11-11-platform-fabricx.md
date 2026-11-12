@@ -32,7 +32,7 @@ Component | runs today | per-bank or shared | upstream rec
 - Kubeconfig | one cluster-admin alibaba.yaml | shared | n/a
 - Lensa server | host service, FABRICX_KUBECONFIG, kubectl exec + psql on BI DB | shared | n/a
 
-Single-ns fabricx vs multiregion (fabricx-bi, bank-a, bank-b, bank-c): Lensa path is ns fabricx only (fabricx.ts hardcodes it; no refs to fabricx-* in frontend/server/src). Multiregion is closer to per-org (ns per org, restricted PSS, default-deny, own committer+DB, own orderer party, own endorser, token auditor in fabricx-bi, token-issuer-v2; bank-c Services only, no pods). Still one cluster, one kubeconfig, no repo definition, unlabelled digests. Health unclear: fabricx-bi committer sidecar last logs 2026-11-04; token-issuer-v2/token-owner-v2 TLS handshake EOFs 2026-11-11. Upstream namespace-per-org prescription: UNVERIFIED.
+Single-ns fabricx vs multiregion (<foreign-ns>, bank-a, bank-b, bank-c): Lensa path is ns fabricx only (fabricx.ts hardcodes it; no refs to fabricx-* in frontend/server/src). Multiregion is closer to per-org (ns per org, restricted PSS, default-deny, own committer+DB, own orderer party, own endorser, token auditor in <foreign-ns>, token-issuer-v2; bank-c Services only, no pods). Still one cluster, one kubeconfig, no repo definition, unlabelled digests. Health unclear: <foreign-ns> committer sidecar last logs 2026-11-04; token-issuer-v2/token-owner-v2 TLS handshake EOFs 2026-11-11. Upstream namespace-per-org prescription: UNVERIFIED.
 
 FINDING: bank nodes and orderer parties co-scheduled on one node   SEVERITY: major   KIND: drift
   PROJECT:  rdbi-bank2/3/4 + consenters 2 and 4 on member-16045-node.
@@ -74,5 +74,5 @@ ACCEPTED PATCHES (kept by decision; upstream path to compliance):
 - panurus-issuer-keeps-audit-tokens: upstream option for the issuer to store audit tokens without an auditor (token/core/common/authorization.go).
 - panurus-auditor-limits: demo view only; drop for production.
 
-SOURCES: fabric-x/NOTES.md; panurus-itest/README.md; rdbi/topology.go:84; opa/DESIGN.md §6, §9; frontend/server/src/adapters/fabricx.ts; fabric-x-orderer@dd296e3 docs/architecture.md §8; fabric-x-committer@08a469d docs/deployment-guide.md, docs/namespace-policy.md; panurus@5f3c49e2 validator_auditing.go:50-56, docs/drivers/dlogwogh.md:38,50, docs/token_sdk_usage.md §5; read-only kubectl on fabricx, fabricx-bi, fabricx-bank-a/b/c.
+SOURCES: fabric-x/NOTES.md; panurus-itest/README.md; rdbi/topology.go:84; opa/DESIGN.md §6, §9; frontend/server/src/adapters/fabricx.ts; fabric-x-orderer@dd296e3 docs/architecture.md §8; fabric-x-committer@08a469d docs/deployment-guide.md, docs/namespace-policy.md; panurus@5f3c49e2 validator_auditing.go:50-56, docs/drivers/dlogwogh.md:38,50, docs/token_sdk_usage.md §5; read-only kubectl on fabricx, <foreign-ns>, <foreign-ns>.
 UNVERIFIED: upstream committer-per-org or ns-per-org prescription; multiregion health and image provenance; fx-gw fail-closed when bundle-server down; live endorsement payload; co-location is one snapshot; Panurus line numbers beyond those cited.

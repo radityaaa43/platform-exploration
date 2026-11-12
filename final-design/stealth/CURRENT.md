@@ -79,7 +79,7 @@ Evidence: [R] for each address `eth_getCode` (byte counts above), `eth_call` wit
 | Besu RPC, validators, gateways | as listed | confirmed (section 1, OPA table) |
 
 ## 11. Decommission inventory (read-only; decommission is destructive, user-only, its own CLUSTER-OP approval at that time; cluster 1 only, nothing on cluster 2)
-Zeto, Noto + Pente and Stealth SHARE the namespaces `besu` and `paladin` (one inventory, identical in the three CURRENT.md files). Also touched: `dfabi` (the earlier DFABI app, 28d; it reaches Paladin node1 through a NetworkPolicy rule). `kaleido` and `kaleido-dns` (431d old) were not created by this project and were not read.
+Zeto, Noto + Pente and Stealth SHARE the namespaces `besu` and `paladin` (one inventory, identical in the three CURRENT.md files). Also touched: `dfabi` (the earlier DFABI app, 28d; it reaches Paladin node1 through a NetworkPolicy rule). `kaleido` and `<foreign-ns>` (431d old) were not created by this project and were not read.
 | Namespace | Found (names, sizes) | Evidence |
 |---|---|---|
 | `besu` (created 2026-09-18) | STS `besu-node-validator-1..4`; no Deployments; PVC `data-besu-node-validator-N-0` 4 x 40Gi (class `besu-node-validator-N-storage`); Secrets `besu-node-validator-N-keys` (4, node keys), 2 `acr-credential-*`, Helm release secrets `sh.helm.release.v1.{genesis,validator-1..4}.*`; ConfigMaps `besu-bootnodes`, `besu-genesis`, `besu-node-validator-N-address`, `besu-node-validator-N-besu-config`, `besu-peers`; 4 NetworkPolicies `besu-node-validator-N-ingress`; 4 headless Services; Jobs `besu-genesis-init` + 4 `...-pre-install-hook` (Completed) | [K] `kubectl -n besu get sts,deploy,pvc,secret,cm,networkpolicy,svc,job` |

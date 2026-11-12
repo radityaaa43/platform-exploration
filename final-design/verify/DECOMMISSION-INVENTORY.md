@@ -1,6 +1,6 @@
 # Decommission inventory G1-G11 (cluster 1, old namespaces)
 
-Read-only inventory by `qa`, 2026-11-12 (CST morning; run 23:50Z on 2026-11-11). Namespaces: `dfabi`, `paladin`, `besu`, `iroha3`, `fabricx` (never `fabricx-bi` / `fabricx-bank-*`).
+Read-only inventory by `qa`, 2026-11-12 (CST morning; run 23:50Z on 2026-11-11). Namespaces: `dfabi`, `paladin`, `besu`, `iroha3`, `fabricx` (never `<foreign-ns>` / `<foreign-ns>`).
 Credential: cluster-admin `get`/`list` only (R19(b)1+3). No Secret read, no log read, no exec. Nothing was changed. Reference counts are plain string hits (grep -F of the Service name), not proof of a live consumer. Env values appear only as host:port; no tokens.
 Host at run time: `free -m` available 3166 MB (23:50:56Z).
 
