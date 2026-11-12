@@ -14,6 +14,7 @@ Evidence rule: `repo@commit:path:line` or docs URL + version. Memory, NOTES.md, 
 | Fabric-X | [ARCHITECTURE-fabricx.md](ARCHITECTURE-fabricx.md) | fabric-x-committer 1.0.4, fabric-x-orderer 1.0.4, Panurus v0.24.0 (+4 accepted patches), FSC v0.24.0 |
 | Iroha 3 | [ARCHITECTURE-iroha3.md](ARCHITECTURE-iroha3.md) | hyperledger-iroha/iroha 071e281e, driver iroha3-rd-node-build be4dd89 |
 | Exemptions | [EXEMPTIONS.md](EXEMPTIONS.md) | user-granted platform-limit exemptions E1-E9 (2026-11-12) |
+| Grand design | [GRAND-DESIGN.md](GRAND-DESIGN.md) | user-adopted reference 2026-11-12: own stack per party, R1-R3, essential rows, critical path |
 
 Phase 1 verdicts (source: `agents/analyst/reports/2026-11-11-matrix.md`):
 
