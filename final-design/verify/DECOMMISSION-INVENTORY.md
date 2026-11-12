@@ -9,12 +9,12 @@ Host at run time: `free -m` available 3166 MB (23:50:56Z).
 - `dfabi` is ABSENT on cluster 1. Decommission order becomes **paladin -> besu**, besu only after S5b (old besu is the only QBFT validator set; S5a handover first).
 - Old `iroha3` and `fabricx` stay until their S14 / S15 close and Lensa's forwards move.
 - The live-consumer check is NOT re-run until fe changes `forwards.conf` (lead will say when).
-- Open question to besu (lead): who owns `47.236.100.234` and which ACL id restricts it.
+- `47.236.100.234` owner and ACL: answered by besu, see G5 blocker 2 (RESOLVED).
 
 ## G5 blockers (each needs an owner decision before any delete)
 
 1. `frontend/deploy/forwards.conf` still has 9 forwards into old namespaces (5 into `iroha3`, 4 into `fabricx`; see list below).
-2. The running Lensa process points `LENSA_GW_PALADIN_C` and `LENSA_BESU_RPC_BANKS` at the public address `47.236.100.234` (:8548, :8545, https). Owner and intent not verified by qa.
+2. RESOLVED (besu, relayed by lead 2026-11-12): `47.236.100.234` is `bank-gw-4-ext` in `rd-zeto-bank-c` (cluster 2), Envoy + OPA. ACL `acl-gs5m5o9vb3olr19484tyg`, white list, sourceRanges `['8.215.62.92/32']` only (the cluster-1 egress NAT). The same ACL sits on 6 cluster-2 Services: `bank-gw-4-ext`, `paladin-transport`, `rd-iroha3-bank-c` p2p, `fx-gw-4-lb`, `lb-4`, `rdbi-p2p-bank4`. No-cert TLS from the qa host: `:8545` and `:8548` both answer the alert `certificate required`, no HTTP answer. So Lensa's `LENSA_GW_PALADIN_C` and `LENSA_BESU_RPC_BANKS` use of this address is intended and restricted; it is not a leftover. (Facts are besu's, quoted; qa did not re-run the probe.)
 3. Old `besu` is the only QBFT validator set until S5b.
 4. `qa` scripts and the besu / fabric-x repos still contain thousands of old service-name string hits (not triaged; most are history).
 5. Operators: `paladin-operator` is at 0 replicas in `paladin`, so Paladin CR finalizers are not served there. No operator deployment exists in `besu`, `iroha3`, `fabricx`.
