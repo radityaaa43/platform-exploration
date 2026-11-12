@@ -115,7 +115,7 @@ Finding: protocol routes allow it, library and docs give no way to do it. Status
 
 ### Hard limits (cannot be fixed on our side)
 
-1. Fixed lane author: `validator_set[(lane_height-1) % n]`, no view input; autonomous artifact rejected if producer differs (`lane_consensus.rs:96-107,854-860`). Any single peer down stops user txs. Spreading peers over orgs makes a stall more likely, not less. R2 ACCEPTED.
+1. Fixed lane author: `validator_set[(lane_height-1) % n]`, no view input; autonomous artifact rejected if producer differs (`lane_consensus.rs:96-107,854-860`). Any single peer down stops user txs. Spreading peers over orgs makes a stall more likely, not less. R2 ACCEPTED. **User-granted exemption 2026-11-12 (permanent, R2):** "BI auditor offline = OK (after S13 2-of-3 auditors; capsule quorum skips unreachable endpoints and needs 3 of 4 views, crates/iroha/src/client/private_settlement.rs:2756-2833); BI validator offline = settlement stalls at BI's lane turn (upstream limit, hard limit 1)". The BI auditor stays required in the 2-of-3 set (S13).
 2. V1 geometry: exactly 4 validators per authority, `f = 1` (spec `:44-46`); `max_validators = 4` (`nexus.toml:69`). A fifth bank peer is impossible; banks A, B, C and BI is the full set.
 3. Online auditor required: `min_approvals >= 1` (`data_model/.../private_settlement.rs:2224-2227`; `state.rs:1118`). ACCEPTED. Cost: auditor down = no Prepare.
 4. No multi-party witness exchange (section above). Per-bank proving of both legs stays blocked by the no-custom rule.
