@@ -201,7 +201,7 @@ Key fact for the order: any change of an Arma party address or any new CA/MSP me
 - Owner: fabric  Size: L
 - Prerequisites: S10, S13, S16, ADR 0001, user-supplied cluster-2 kubeconfig
 - Flags: BLOCKED(orderer party placement X/Y), CLUSTER-OP, spend (new pods)
-- Does: ns `rd-fabricx-bank-c` already exists (S1 cluster-2 sub-step); these workloads are a second GO: party 4, committer, FSC + endorser-4, `fx-gw-4` (LoadBalancer behind mTLS), requests on every container; images 1.0.4 by digest; public endpoints for P2P/Arma. Never read or touch another cluster-2 namespace, incl. `fabricx-bank-c`. Schedule last (memory risk, ARCHITECTURE 2a.3).
+- Does: ns `rd-fabricx-bank-c` already exists (S1 cluster-2 sub-step); these workloads are a second GO: party 4, committer, FSC + endorser-4, `fx-gw-4` (LoadBalancer behind mTLS), requests on every container; images 1.0.4 by digest; public endpoints for P2P/Arma. Never read or touch another cluster-2 namespace, incl. `<foreign-ns>`. Schedule last (memory risk, ARCHITECTURE 2a.3).
 - RED proof: read-only: `kubectl -n rd-fabricx-bank-c get pods` all Running; qa transfer bank A to C confirmed; BI-offline transfer still settles.
 - Rollback: `kubectl delete ns rd-fabricx-bank-c` (only our namespace; user-only).
 - Sources: ARCHITECTURE 2a.1-2a.4; orderer@dd296e3:config/reconfig.go:68,96; committer@08a469d:docs/sidecar.md:482-486
@@ -227,12 +227,12 @@ Key fact for the order: any change of an Arma party address or any new CA/MSP me
 - Sources: CURRENT.md section 11; ARCHITECTURE 2.2
 
 ### S21: Retire multiregion namespaces
-- DECIDED (2026-11-11 ~23:45 CST, user-delegated decision via the analyst (pins besu 26.8.1 d97cbd61, paladin v1.0.0 6d4b913)): `fabricx-bi`, `fabricx-bank-a`, `fabricx-bank-b`, `fabricx-bank-c` on cluster 1 are OUT OF SCOPE: another team's stack (KPID-poc / Rupiah-Digital-Eksplorasi platforms/fabric-x). No workload reads, no delete, removed from every list. This step is VOID. Old `fabricx` (ours): mode "bertahap": its 28 PVs patched to Retain 2026-11-11 (list in rd-fabric-x operator notes); named backup + restore test; delete only after the new stack passes VERIFY for Lensa (S22).
+- DECIDED (2026-11-11 ~23:45 CST, user-delegated decision via the analyst (pins besu 26.8.1 d97cbd61, paladin v1.0.0 6d4b913)): `<foreign-ns>`, `<foreign-ns>`, `<foreign-ns>`, `<foreign-ns>` on cluster 1 are OUT OF SCOPE: another team's stack (KPID-poc / Rupiah-Digital-Eksplorasi platforms/fabric-x). No workload reads, no delete, removed from every list. This step is VOID. Old `fabricx` (ours): mode "bertahap": its 28 PVs patched to Retain 2026-11-11 (list in rd-fabric-x operator notes); named backup + restore test; delete only after the new stack passes VERIFY for Lensa (S22).
 - DELTA: 12 -> AFTER row: "RETIRE as a stack, KEEP as pattern source"
 - Owner: lead  Size: S
 - Prerequisites: S20, ADR 0002 (user)
 - Flags: BLOCKED(retire multiregion stack), user-only, CLUSTER-OP, destructive
-- Does: cluster 1 only: ns `fabricx-bi`, `fabricx-bank-a`, `fabricx-bank-b`, `fabricx-bank-c` as listed by CURRENT section 1 on cluster 1 (creation history [unverified]; the user confirms in ADR 0002 that they are this project's). The cluster-2 namespace of the same name `fabricx-bank-c` is foreign and is never read, used or touched. Before any delete: inventory with read-only `kubectl get` (same kinds as S22) added to CURRENT.md, export `kubectl get all,secret,configmap,pvc,networkpolicy -n <ns> -o yaml` (Secrets by name only in the file) to the named backup, PV reclaimPolicy read and patched to Retain or snapshotted if Delete.
+- Does: cluster 1 only: ns `<foreign-ns>`, `<foreign-ns>`, `<foreign-ns>`, `<foreign-ns>` as listed by CURRENT section 1 on cluster 1 (creation history [unverified]; the user confirms in ADR 0002 that they are this project's). The cluster-2 namespace of the same name `<foreign-ns>` is foreign and is never read, used or touched. Before any delete: inventory with read-only `kubectl get` (same kinds as S22) added to CURRENT.md, export `kubectl get all,secret,configmap,pvc,networkpolicy -n <ns> -o yaml` (Secrets by name only in the file) to the named backup, PV reclaimPolicy read and patched to Retain or snapshotted if Delete.
 - RED proof: `kubectl get ns | grep -c '^fabricx-'` before: 4; after: 0 (cluster 1).
 - Rollback: none after delete; restore = the named backup `fabricx-multiregion-final-2026-11-<dd>` (manifests export + PV snapshots) into new namespaces.
 - Sources: ARCHITECTURE 2.4

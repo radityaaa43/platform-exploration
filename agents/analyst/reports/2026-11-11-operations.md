@@ -4,19 +4,19 @@ Reviewer: analyst subagent (sonnet), read-only, live reads 2026-11-11 via `KUBEC
 FINDING: fabricx ns runs 34 containers with no requests/limits   SEVERITY: major   KIND: deviation
   PROJECT:  live ns fabricx (committer-*, orderer-*, fca-*, 5 postgres, block-explorer); fabric-x/NOTES.md:27-28 says committers and orderers are unmodified images. No manifest tracked in git; no LimitRange in ns fabricx.
   UPSTREAM: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/ (set requests and limits). Ansible 0.8.26 resource defaults not read: unverified.
-  EVIDENCE: `kubectl get pods -n fabricx -o json | jq '[.items[].spec.containers[]|select(.resources.limits==null)]|length'` -> 34. `kubectl get limitrange -A` lists only idms-kpid and paladin.
+  EVIDENCE: `kubectl get pods -n fabricx -o json | jq '[.items[].spec.containers[]|select(.resources.limits==null)]|length'` -> 34. `kubectl get limitrange -A` lists only <foreign-ns> and paladin.
   FIX:      LimitRange in ns fabricx + resources in the (untracked) Ansible vars. Cluster write: user approval.   OWNER: fabric
 
-FINDING: fabricx-bi / fabricx-bank-a / fabricx-bank-b undocumented and unpinned by version   SEVERITY: major   KIND: drift
+FINDING: <foreign-ns> / <foreign-ns> / <foreign-ns> undocumented and unpinned by version   SEVERITY: major   KIND: drift
   PROJECT:  Three namespaces, 8 days old, 24 pods, label `fabricx-multiregion`. Images `ghcr.io/hyperledger/fabric-x-committer@sha256:4eb210e6...`, `fabric-x-orderer@sha256:de767c3f...`. fabric-x/NOTES.md:9-10 pins 1.0.4 and covers only ns fabricx. Only repo mention: fabric-x/opa/DESIGN.md:18.
   UPSTREAM: fabric-x/NOTES.md:9 (hyperledger/fabric-x-committer v1.0.4, 08a469d2).
-  EVIDENCE: committer digest in fabricx is `sha256:b5bc4c6c...` (tag 1.0.4); in fabricx-bi it is `sha256:4eb210e6...`, version unknown.
+  EVIDENCE: committer digest in fabricx is `sha256:b5bc4c6c...` (tag 1.0.4); in <foreign-ns> it is `sha256:4eb210e6...`, version unknown.
   FIX:      Record owner, version, purpose of the three namespaces in NOTES.md, or confirm they belong to another team.   OWNER: fabric
 
 FINDING: Fabric-X liveness/readiness gaps   SEVERITY: major   KIND: deviation
-  PROJECT:  ns fabricx: rdbi-bank2/3/4 (8 containers each) and rdbi-bi (FSC node, endorser, committer-*, db) have no probes. fx-gw-1..4 envoy and fxapi have no liveness probe. fabricx-bi/bank-a/bank-b committer and orderer: readiness only.
+  PROJECT:  ns fabricx: rdbi-bank2/3/4 (8 containers each) and rdbi-bi (FSC node, endorser, committer-*, db) have no probes. fx-gw-1..4 envoy and fxapi have no liveness probe. <foreign-ns>/bank-a/bank-b committer and orderer: readiness only.
   UPSTREAM: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/. committer/orderer health endpoint defaults not read: unverified.
-  EVIDENCE: `kubectl get pods -n fabricx -o json | jq ...` -> `committer-verifier|lim=true|live=false|ready=false`; same live=false for committer and orderer in fabricx-bi.
+  EVIDENCE: `kubectl get pods -n fabricx -o json | jq ...` -> `committer-verifier|lim=true|live=false|ready=false`; same live=false for committer and orderer in <foreign-ns>.
   FIX:      TCP or gRPC health probe on rdbi-* containers; liveness on multiregion committers and orderers.   OWNER: fabric
 
 FINDING: Backups and monitoring are thin   SEVERITY: major   KIND: deviation
@@ -69,7 +69,7 @@ SOURCES:
 UNVERIFIED:
 - Upstream v1.0.0 operator probe defaults (clone is rc.12-322, not the tag).
 - Ansible 0.8.26 and committer/orderer 1.0.4 resource and health-endpoint defaults.
-- fabricx-bi/bank-a/bank-b image version (digest unlabelled).
+- <foreign-ns>/bank-a/bank-b image version (digest unlabelled).
 - Iroha /storage usage.
 - "PVCs shrunk to 2Gi on 2026-10-21": live shows 2Gi on fabricx PVCs, no doc in git.
 - qgt-0.2.20 chart defaults; backup-pld-*.yaml secret values.

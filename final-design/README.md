@@ -24,9 +24,9 @@ Evidence tags in CURRENT.md: `[L]` live read-only command with quoted output, `[
 | Cluster | Parties | Rule |
 |---|---|---|
 | Cluster 1 (ap-southeast-5) | `bi`, `bank-a`, `bank-b` | existing project namespaces (`besu`, `paladin`, `dfabi`, `fabricx`, `iroha3`) keep running until the cutover step of each plan; decommission is the last step of each PLAN.md |
-| Cluster 2 (ap-southeast-1) | `bank-c` | only NEW namespaces this project creates; every namespace existing there today is foreign: never read at workload level, used, modified, reused or named as reusable (incl. `fabricx-bank-c`); node-level facts only; nothing is ever deleted on cluster 2; the first write there is a CLUSTER-OP that creates the new namespaces only |
+| Cluster 2 (ap-southeast-1) | `bank-c` | only NEW namespaces this project creates; every namespace existing there today is foreign: never read at workload level, used, modified, reused or named as reusable (incl. `<foreign-ns>`); node-level facts only; nothing is ever deleted on cluster 2; the first write there is a CLUSTER-OP that creates the new namespaces only |
 
-The old namespace `kaleido` was not created by this project and is not read (zeto/CURRENT.md); it is out of scope for decommission unless the user says otherwise.
+The old namespace `<foreign-ns>` was not created by this project and is not read (zeto/CURRENT.md); it is out of scope for decommission unless the user says otherwise.
 
 ## Cross-platform order
 
@@ -96,7 +96,7 @@ Every user-only item from the five plans (30 rows), with the step it blocks and 
 | 11 | RD issuer redeploy vs key move | stealth | stealth S14 | move key, keep address / redeploy | move key, keep address | stealth/adr/0003 | decided 2026-11-11: lead default applies |
 | 12 | Stealth key reset after the custody move (keys sat in Lensa's shared state file) | stealth | stealth S9, S10, S21 | copy only / rotate per bank | copy now, rotate per bank as follow-up; Lensa copy destroyed at S21 | - | decided 2026-11-11: lead default applies; user 2026-11-12 ~02:20 CST "rotasi stealth ya" (rotate inside S9) was CANCELLED by the user ~02:35 CST: NO rotation (one key, one meta-address registration per ERC-5564/6538 practice); the S7 copied keys are the PERMANENT bank keys; accepted risk: the origin host file cannot be proven private (destroyed at the Lensa S9 shred list); reversible later: ERC-6538 registerKeys can overwrite, then old-key balances need a sweep |
 | 13 | Fabric-X orderer/committer party placement across two clusters (re-genesis either way) | fabricx | fabricx S9, S10, S11, S18 | per ADR (X/Y) | none; the user picks (data does not carry across the re-genesis) | fabricx/adr/0001 | decided by user 2026-11-11: YES: AFTER topology 3/1 (parties 1-3 on cluster 1, party 4 = bank C on cluster 2), re-genesis route, balances do not carry |
-| 14 | Retire the multiregion namespaces `fabricx-bi`, `fabricx-bank-a/b/c` on cluster 1 | fabricx | fabricx S21 | retire after inventory + backup / keep | OUT OF SCOPE: another team's stack (KPID-poc / Rupiah-Digital-Eksplorasi), never read or deleted | fabricx/adr/0002 | decided 2026-11-11 ~23:45 CST (analyst, user-delegated): S21 void |
+| 14 | Retire the multiregion namespaces `<foreign-ns>`, `<foreign-ns>` on cluster 1 | fabricx | fabricx S21 | retire after inventory + backup / keep | OUT OF SCOPE: another team's stack (KPID-poc / Rupiah-Digital-Eksplorasi), never read or deleted | fabricx/adr/0002 | decided 2026-11-11 ~23:45 CST (analyst, user-delegated): S21 void |
 | 15 | LifecycleEndorsement policy | fabricx | fabricx S8 | 4-of-4 / MAJORITY | MAJORITY (one org down must not block lifecycle) | fabricx/adr/0003 | decided 2026-11-11: lead default applies |
 | 16 | Delete `rdbi-driver` Deployment + `rdbi-driver-files` Secret (view keys of every node) | fabricx | fabricx S5 | delete after export / keep | delete after manifest export (Secret unrecoverable unless exported) | - | decided 2026-11-11: lead default applies |
 | 17 | Post the accepted Panurus patches upstream | fabricx | fabricx S7 | post / keep local | keep local (standing rule: post nothing upstream) | - | decided 2026-11-11: lead default applies |

@@ -117,7 +117,7 @@ Read-only grep over `frontend/`, `besu/opa`, `fabric-x/opa`, `iroha3/deploy`; cl
 | `kaleido` | none | none | no namespace of this name anywhere in `frontend/`, `besu/opa`, `fabric-x/opa` (grep `kaleido` = 0 hits in code/manifests). Only the PUBLIC ingress hosts `paladin-node1..4.apse5.kld.bi-sandbox.com` (`besu/opa/k8s/ingress-via-gateway.yaml:21-71`, `networkpolicy.yaml:107`) |
 | `dfabi` | none | none | selector only: `besu/opa/k8s/networkpolicy.yaml:24,49,74,99` allow ns `dfabi` (DFABI `bankN-backend`) into the Paladin nodes; not used by Lensa |
 | `kube-system`, `ingress-nginx`, `default` | none | none | selectors/lookups only: `networkpolicy.yaml:122` (kube-system), `:113-125` (`paladin-rpc-from-ingress-nginx`, apps `ingress-nginx` / `ack-ingress-nginx-v1`), `kubernetes` endpoints in `default` for the bundle-server policy (rd-besu #9) |
-| `fabricx-bi`, `fabricx-bank-a/b/c` | none | none | NOT used by Lensa (`fabric-x/opa/DESIGN.md:18-20`: separate fabricx-transfer-v2 stack) |
+| `<foreign-ns>`, `<foreign-ns>` | none | none | NOT used by Lensa (`fabric-x/opa/DESIGN.md:18-20`: separate fabricx-transfer-v2 stack) |
 Also hardcoded outside namespaces: `forwards.conf` is the only place a unit-to-namespace mapping lives (one line per forward; unit name = first column, used in `lensa.service:3-4` Wants/After for 17 units).
 Decommission prerequisite, checkable in one pass (read-only, from the repo root of the old layout):
 - `grep -nE "^\S+\s+<ns>\s" frontend/deploy/forwards.conf` = 0 lines, and `systemctl --user list-units 'lensa-pf@*' --no-legend` shows none of those units; `lensa.service:3-4` no longer lists them.

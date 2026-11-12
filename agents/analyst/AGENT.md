@@ -23,7 +23,7 @@ Read [`../TEAM.md`](../TEAM.md) first. This file adds what is specific to the an
 
 | Area | Project uses | Upstream to read | Verify pin with |
 |------|--------------|------------------|-----------------|
-| Besu | ns `besu`: `hyperledger/besu:26.8.1` (ns `kaleido` is the Kaleido platform, out of scope) | `besu-eth/besu` tag `26.8.1` | `KUBECONFIG=./alibaba.yaml kubectl get pods -A -o jsonpath='{range .items[*]}{.metadata.namespace}{" "}{.spec.containers[*].image}{"\n"}{end}' \| grep besu: \| sort -u` |
+| Besu | ns `besu`: `hyperledger/besu:26.8.1` (ns `<foreign-ns>` is the Kaleido platform, out of scope) | `besu-eth/besu` tag `26.8.1` | `KUBECONFIG=./alibaba.yaml kubectl get pods -A -o jsonpath='{range .items[*]}{.metadata.namespace}{" "}{.spec.containers[*].image}{"\n"}{end}' \| grep besu: \| sort -u` |
 | Paladin (Noto, Pente, operator) | operator `v1.0.0`; node image per `besu/NOTES.md` (fork digest `6f113f38…`) | `LFDT-Paladin/paladin` tag `v1.0.0` on GitHub. Local clone `/home/ecs-user/eksplorasi-paladin/paladin` is the running fork (`4ab578f3a`), not the tag: cite it only for "what runs" | `grep -n 'paladin.image' besu/NOTES.md` |
 | Zeto | `v0.5.1` (V1 tokens only) | `LFDT-Paladin/zeto` tag `v0.5.1` | `grep -rhoE 'zeto v?0\.[0-9.]+' besu \| sort -u` |
 | Fabric-X committer, orderer | `1.0.4` | `hyperledger/fabric-x-committer`, `hyperledger/fabric-x-orderer`; full pin table with commits in `fabric-x/NOTES.md` | `grep -rhoE 'fabric-x-(committer\|orderer):[0-9.]+' fabric-x \| sort -u` |

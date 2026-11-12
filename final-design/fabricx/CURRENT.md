@@ -6,7 +6,7 @@ Pins (repo `fabric-x/NOTES.md:5-12`): Panurus v0.24.0 5f3c49e2, FSC v0.24.0 8653
 
 ## 1. Namespaces
 - `fabricx` (ours, cluster 1, ap-southeast-5): everything below.
-- `fabricx-bi`, `fabricx-bank-a`, `fabricx-bank-b`, `fabricx-bank-c`: exist, foreign to the final design, not read inside. Command: `kubectl get ns --no-headers | awk '{print $1}' | grep -i fabricx` -> `fabricx fabricx-bank-a fabricx-bank-b fabricx-bank-c fabricx-bi`.
+- `<foreign-ns>`, `<foreign-ns>`, `<foreign-ns>`, `<foreign-ns>`: exist, foreign to the final design, not read inside. Command: `kubectl get ns --no-headers | awk '{print $1}' | grep -i fabricx` -> `fabricx <foreign-ns> <foreign-ns> <foreign-ns> <foreign-ns>`.
 - `paladin` (cluster 1) hosts `bundle-server`, which the fx-gw gateways pull bundles from and post decision logs to (section 10).
 - One namespace, one cluster for every Fabric-X institution: `panurus-itest/README.md:178` "All institutions run in one cluster namespace"; `k8s.py:30` `NS = "fabricx"`.
 
@@ -140,4 +140,4 @@ Planning input for the last PLAN.md step "Decommission fabricx": destructive, us
   - Team files: `agents/ops/post-reboot-check.sh:8` (`NAMESPACES=${NAMESPACES:-paladin iroha3 fabricx}`), `agents/fabric/AGENT.md:12` (on origin/master).
   - CI: `fabric-x/.github/workflows/ci.yml` and `rdbi.yml`: no reference to the namespace (`grep -n fabricx` -> no hit); they never touch a cluster.
   - Dependency in the other direction: `ghcr-pull` is copied from ns `dfabi` (`k8s.py:248`); `fx-gw-N` pull bundles from ns `paladin` (`k8s.py:343-344`).
-- Other namespaces this project created for Fabric-X: none. The only namespace constant in the repo is `NS = "fabricx"` (`k8s.py:30`). `fabricx-bi`, `fabricx-bank-a`, `fabricx-bank-b`, `fabricx-bank-c` exist on cluster 1: foreign to the final design, not read, not to be touched by that step [their creation history is unverified].
+- Other namespaces this project created for Fabric-X: none. The only namespace constant in the repo is `NS = "fabricx"` (`k8s.py:30`). `<foreign-ns>`, `<foreign-ns>`, `<foreign-ns>`, `<foreign-ns>` exist on cluster 1: foreign to the final design, not read, not to be touched by that step [their creation history is unverified].
