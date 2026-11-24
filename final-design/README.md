@@ -13,6 +13,7 @@ Skills used (this file): `superpowers:writing-plans`, `ecc:plan` (cross-platform
 | Stealth | [stealth/CURRENT.md](stealth/CURRENT.md) (`besu`) | [stealth/PLAN.md](stealth/PLAN.md) | [stealth/CONTRACTS.md](stealth/CONTRACTS.md) | `stealth/adr/` | `stealth/VERIFY.md` |
 | Fabric-X | [fabricx/CURRENT.md](fabricx/CURRENT.md) (`fabric`) | [fabricx/PLAN.md](fabricx/PLAN.md) | [fabricx/CONTRACTS.md](fabricx/CONTRACTS.md) | `fabricx/adr/` | `fabricx/VERIFY.md` |
 | Iroha 3 | [iroha3/CURRENT.md](iroha3/CURRENT.md) (`iroha`) | [iroha3/PLAN.md](iroha3/PLAN.md) | [iroha3/CONTRACTS.md](iroha3/CONTRACTS.md) | `iroha3/adr/` | `iroha3/VERIFY.md` |
+| Iroha 2 (T5 since 2026-11-24) | code, CI/CD and findings in the private repo `radityaaa43/iroha2-rd-dfabi` (nested `iroha2/`): [iroha2/README.md](iroha2/README.md) | blueprint v2.0 gates G0+G1 | n/a | `iroha2/docs/adr/` (in that repo) | `findings/` (in that repo) |
 | Lensa (shared) | [LENSA.md](LENSA.md) (`fe`): keys Lensa holds, forwards and state per namespace, "Namespace references" | steps live in each platform PLAN (Lensa pointer steps) | n/a | n/a | per platform |
 
 Evidence tags in CURRENT.md: `[L]` live read-only command with quoted output, `[R]` repo `path:line` at the pinned sha, `[K]` Kubernetes object by name, `[H]` hash, `[F]` file on the operator host (names only), `[U]`/`[unverified]` not verified. Where CURRENT differs from the analyst's BEFORE, CURRENT wins and the file's "BEFORE vs found" table records it.
